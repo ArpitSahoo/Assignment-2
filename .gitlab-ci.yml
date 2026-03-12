@@ -1,0 +1,42 @@
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: always
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: always
+    - when: never
+
+stages:
+  - lint
+  - test
+  - build
+
+default:
+  image: golang:1.25
+
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - go.sum
+    - go.mod
+    - $GOPATH/pkg/mod
+    - $GOCACHE
+
+lint:
+  stage: lint
+  image: golangci/golangci-lint:latest
+  script:
+    - golangci-lint run ./...
+
+test:
+  stage: test
+  needs: ["lint"]
+  script:
+    - go mod download
+    - go test ./... -v
+
+build:
+  stage: build
+  needs: ["test"]
+  script:
+    - go build -o app .
