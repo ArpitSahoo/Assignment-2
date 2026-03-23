@@ -16,6 +16,7 @@ var (
 	}
 )
 
+// apiResult is a struct that holds the name and status of an API.
 type apiResult struct {
 	Name   string
 	Status int
