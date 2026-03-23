@@ -1,0 +1,8 @@
+#IDE
+.idea/
+
+#JSON
+.json
+
+#Environment files
+.env
