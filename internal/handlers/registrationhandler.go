@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"assignment-2/internal/utility"
+	"context"
 	"encoding/json"
 	"io"
 	"log"
@@ -21,7 +22,7 @@ type Handler struct {
 }
 
 // AddRegistration handles POST requests to the /registrations endpoint.
-// Validates and normalizes the request body, stores a dashboard configuration in
+// It decodes, normalizes and validates the request body, stores a dashboard configuration in
 // Firestore, increments the local registration counter and returns the generated
 // registration ID and last-change timestamp.
 func (h *Handler) AddRegistration(w http.ResponseWriter, r *http.Request) {
@@ -34,20 +35,14 @@ func (h *Handler) AddRegistration(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Received %s request", r.Method)
 
-	var regReq utility.RegistrationRequest
-	// Decode the original request
-	if decodeRegReq(w, r, &regReq) {
-		return
-	}
-	// Apply normalization on the original request
-	normalizeFields(&regReq)
-
-	if validateRegReq(w, regReq) {
+	// Decode, normalize and validate
+	regReq, ok := parseRegReq(w, r)
+	if !ok {
 		return
 	}
 
-	ctx := r.Context()
-	lastChange := time.Now().Format(time.RFC3339)
+	ctx := firestoreContext(r)
+	lastChange := currentLastChange()
 
 	// Store registration payload in Firestore and let Firestore generate document ID.
 	ref, _, err := h.Client.Collection(utility.RegistrationsCollection).Add(ctx, map[string]any{
@@ -58,7 +53,7 @@ func (h *Handler) AddRegistration(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log.Printf("Failed to add registration: %v", err)
-		http.Error(w, "Failed to add registration", http.StatusInternalServerError)
+		http.Error(w, "failed to add registration", http.StatusInternalServerError)
 		return
 	}
 
@@ -76,11 +71,58 @@ func (h *Handler) AddRegistration(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// ReplaceRegistration handles PUT requests to the /registrations/{id} endpoint.
+// It decodes, normalizes and validates the request body, replaces the stored registration
+// configuration for the given ID, updates the last-change timestamp, and returns
+// an empty body.
+func (h *Handler) ReplaceRegistration(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Received %s request", r.Method)
+	id := r.PathValue("id")
+	if id == "" {
+		http.Error(w, "invalid registration id", http.StatusBadRequest)
+		return
+	}
+
+	// Decode, normalize and validate
+	regReq, ok := parseRegReq(w, r)
+	if !ok {
+		return
+	}
+
+	ctx := firestoreContext(r)
+	lastChange := currentLastChange()
+
+	// Gets a stored registration for specific ID
+	_, errGet := h.Client.Collection(utility.RegistrationsCollection).Doc(id).Get(ctx)
+	if errGet != nil {
+		log.Printf("Failed to get registration: %v", errGet)
+		http.Error(w, "failed getting registration", http.StatusNotFound)
+		return
+	}
+
+	// Updates registration for the specific ID
+	_, errSet := h.Client.Collection(utility.RegistrationsCollection).Doc(id).Set(ctx, map[string]any{
+		"country":    regReq.Country,
+		"isoCode":    regReq.IsoCode,
+		"features":   regReq.Features,
+		"lastChange": lastChange,
+	})
+	if errSet != nil {
+		log.Printf("Failed to update registration: %v", errSet)
+		http.Error(w, "failed updating registration", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("Replaced registration with ID: %s", id)
+	// Respond with status code 200
+	w.WriteHeader(http.StatusOK)
+}
+
 // decodeRegReq decodes the JSON request body into a registration request.
 // Writes a HTTP error response if decoding fails.
 func decodeRegReq(w http.ResponseWriter, r *http.Request, regReq *utility.RegistrationRequest) bool {
 	if err := json.NewDecoder(r.Body).Decode(regReq); err != nil {
-		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+		http.Error(w, "invalid json payload", http.StatusBadRequest)
 		return true
 	}
 	return false
@@ -97,25 +139,38 @@ func encodeRegResp(w http.ResponseWriter, ref *firestore.DocumentRef, lastChange
 	}
 }
 
+// currentLastChange keeps track of time and date of which a registration
+// has been created or updated.
+func currentLastChange() string {
+	lastChange := time.Now().Format(time.RFC3339)
+	return lastChange
+}
+
+// firestoreContext returns the request context used for Firestore operations.
+func firestoreContext(r *http.Request) context.Context {
+	return r.Context()
+}
+
 // validateRegReq validates registration fields and writes a HTTP error
 // response if validation fails.
 func validateRegReq(w http.ResponseWriter, regReq utility.RegistrationRequest) bool {
 	if len(regReq.IsoCode) != 2 {
-		http.Error(w, "ISO-code must be 2-letter country code", http.StatusBadRequest)
+		http.Error(w, "iso-code must be 2-letter country code", http.StatusBadRequest)
 		return true
 	}
 
 	for _, l := range regReq.IsoCode {
 		if !unicode.IsLetter(l) {
-			http.Error(w, "ISO-code must contain only letters", http.StatusBadRequest)
+			http.Error(w, "iso-code must contain only letters", http.StatusBadRequest)
 			return true
 		}
 	}
 
 	if regReq.Country == "" {
-		http.Error(w, "Missing country", http.StatusBadRequest)
+		http.Error(w, "missing country", http.StatusBadRequest)
 		return true
 	}
+
 	return false
 }
 
@@ -128,4 +183,21 @@ func normalizeFields(regReq *utility.RegistrationRequest) {
 	for i, c := range regReq.Features.TargetCurrencies {
 		regReq.Features.TargetCurrencies[i] = strings.ToUpper(strings.TrimSpace(c))
 	}
+}
+
+// parseRegReq decodes, normalizes and validates a registration request.
+// Returns the parsed request, false if any step fails.
+func parseRegReq(w http.ResponseWriter, r *http.Request) (utility.RegistrationRequest, bool) {
+	var regReq utility.RegistrationRequest
+
+	if decodeRegReq(w, r, &regReq) {
+		return utility.RegistrationRequest{}, false
+	}
+
+	normalizeFields(&regReq)
+
+	if validateRegReq(w, regReq) {
+		return utility.RegistrationRequest{}, false
+	}
+	return regReq, true
 }
