@@ -6,6 +6,7 @@ import (
 
 	"cloud.google.com/go/firestore"
 	firebase "firebase.google.com/go"
+	"google.golang.org/api/option"
 )
 
 // Firebase context and client used by Firestore functions throughout the program.
@@ -26,9 +27,8 @@ func GetFirebaseClient() (*firestore.Client, error) {
 	// We use a service account, load credentials file that you downloaded from your project's settings menu.
 	// It should reside in your project directory.
 	// Make sure this file is git-ignored, since it is the access token to the database.
-	// sa := option.WithCredentialsFile("./assigment-2-firebase-secret.json"), this is getting deprecated and
-	// will not be accepted by the lint.
-	app, err := firebase.NewApp(ctx, nil)
+	sa := option.WithCredentialsFile("./assigment-2-firebase-secret.json")
+	app, err := firebase.NewApp(ctx, nil, sa)
 	if err != nil {
 		log.Println(err)
 		return nil, err
