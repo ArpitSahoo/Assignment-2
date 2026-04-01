@@ -3,6 +3,7 @@ package handlers
 import (
 	"assignment-2/internal/utility"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -19,38 +20,29 @@ type Handler struct {
 	RegistrationCount atomic.Int64
 }
 
-// addRegistration handles POST requests to the /registration endpoint.
+// AddRegistration handles POST requests to the /registrations endpoint.
 // Validates and normalizes the request body, stores a dashboard configuration in
 // Firestore, increments the local registration counter and returns the generated
 // registration ID and last-change timestamp.
-// TODO: consider creating a validation function
-func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
+func (h *Handler) AddRegistration(w http.ResponseWriter, r *http.Request) {
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Printf("Error closing body: %v", err)
+		}
+	}(r.Body)
 
 	log.Printf("Received %s request", r.Method)
 
 	var regReq utility.RegistrationRequest
-	if err := json.NewDecoder(r.Body).Decode(&regReq); err != nil {
-		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+	// Decode the original request
+	if decodeRegReq(w, r, &regReq) {
 		return
 	}
 	// Apply normalization on the original request
 	normalizeFields(&regReq)
 
-	if len(regReq.IsoCode) != 2 {
-		http.Error(w, "ISO-code must be 2-letter country code", http.StatusBadRequest)
-		return
-	}
-
-	for _, l := range regReq.IsoCode {
-		if !unicode.IsLetter(l) {
-			http.Error(w, "ISO-code must contain only letters", http.StatusBadRequest)
-			return
-		}
-	}
-
-	if regReq.Country == "" {
-		http.Error(w, "Missing country", http.StatusBadRequest)
+	if validateRegReq(w, regReq) {
 		return
 	}
 
@@ -80,11 +72,51 @@ func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 
 	// Encode the response body as JSON
-	_ = json.NewEncoder(w).Encode(utility.RegistrationResponse{
+	encodeRegResp(w, ref, lastChange)
+
+}
+
+// decodeRegReq decodes the JSON request body into a registration request.
+// Writes a HTTP error response if decoding fails.
+func decodeRegReq(w http.ResponseWriter, r *http.Request, regReq *utility.RegistrationRequest) bool {
+	if err := json.NewDecoder(r.Body).Decode(regReq); err != nil {
+		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+		return true
+	}
+	return false
+}
+
+// encodeRegResp encodes a registration response as JSON and logs an error if
+// encoding fails.
+func encodeRegResp(w http.ResponseWriter, ref *firestore.DocumentRef, lastChange string) {
+	if err := json.NewEncoder(w).Encode(utility.RegistrationResponse{
 		ID:         ref.ID,
 		LastChange: lastChange,
-	})
+	}); err != nil {
+		log.Printf("Failed to encode registration response: %v", err)
+	}
+}
 
+// validateRegReq validates registration fields and writes a HTTP error
+// response if validation fails.
+func validateRegReq(w http.ResponseWriter, regReq utility.RegistrationRequest) bool {
+	if len(regReq.IsoCode) != 2 {
+		http.Error(w, "ISO-code must be 2-letter country code", http.StatusBadRequest)
+		return true
+	}
+
+	for _, l := range regReq.IsoCode {
+		if !unicode.IsLetter(l) {
+			http.Error(w, "ISO-code must contain only letters", http.StatusBadRequest)
+			return true
+		}
+	}
+
+	if regReq.Country == "" {
+		http.Error(w, "Missing country", http.StatusBadRequest)
+		return true
+	}
+	return false
 }
 
 // normalizeFields normalizes registration request fields into consistent
