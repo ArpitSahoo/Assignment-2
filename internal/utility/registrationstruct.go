@@ -24,6 +24,6 @@ type RegistrationFeatures struct {
 // RegistrationResponse is a JSON response returned by the /registration endpoint
 // after a registration has been created or updated.
 type RegistrationResponse struct {
-	Id         string `json:"id"`
+	ID         string `json:"id"`
 	LastChange string `json:"lastChange"`
 }
