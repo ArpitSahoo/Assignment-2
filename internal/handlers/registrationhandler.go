@@ -22,49 +22,18 @@ type Handler struct {
 	RegistrationCount atomic.Int64
 }
 
-func (h *Handler) RetrieveAllRegistrations(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Received %s request", r.Method)
-
-	id := r.PathValue("id")
-	ctx := r.Context()
-
-	w.Header().Set("Content-Type", "application/json")
-
-	// ----------- GET ALL -----------
-	if id == "" {
-		iter := h.Client.Collection(utility.RegistrationsCollection).Documents(ctx)
-		defer iter.Stop()
-
-		var results []map[string]interface{}
-
-		for {
-			doc, err := iter.Next()
-			if errors.Is(err, iterator.Done) {
-				break
-			}
-			if err != nil {
-				log.Printf("Error iterating documents: %v", err)
-				http.Error(w, "Error retrieving data", http.StatusInternalServerError)
-				return
-			}
-
-			results = append(results, doc.Data())
-		}
-
-		_ = json.NewEncoder(w).Encode(results)
-		return
+// HandleMessage routes incoming HTTP requests to the appropriate handler method
+// based on the request method. Supports POST for adding registrations and GET
+// for retrieving registrations. Responds with 405 Method Not Allowed for unsupported methods.
+func (h *Handler) HandleMessage(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		h.AddRegistration(w, r)
+	case http.MethodGet:
+		h.RetrieveAllRegistrations(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
-
-	// ----------- GET ONE -----------
-	doc, err := h.Client.Collection(utility.RegistrationsCollection).Doc(id).Get(ctx)
-	if err != nil {
-		log.Printf("Error retrieving document %s: %v", id, err)
-		http.Error(w, "Document not found", http.StatusNotFound)
-		return
-	}
-
-	_ = json.NewEncoder(w).Encode(doc.Data())
-
 }
 
 // AddRegistration handles POST requests to the /registrations endpoint.
@@ -123,6 +92,72 @@ func (h *Handler) AddRegistration(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// RetrieveAllRegistrations handles the GET request to the /registrations endpoint.
+// If an ISO code is provided in the URL path, it retrieves the registration(s) matching that ISO code.0
+// If no ISO code is provided, it retrieves all registrations.
+// The results are returned as a JSON array. If no matching documents are found,
+// it responds with a 404 Not Found status.
+func (h *Handler) RetrieveAllRegistrations(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Received %s request", r.Method)
+
+	isoCode := strings.ToUpper(strings.TrimSpace(r.PathValue("id")))
+	ctx := r.Context()
+
+	w.Header().Set("Content-Type", "application/json")
+
+	// GET ALL if no ISO code is given
+	if len(isoCode) == 0 {
+		iter := h.Client.Collection(utility.RegistrationsCollection).Documents(ctx)
+		defer iter.Stop()
+
+		var results []map[string]interface{}
+
+		for {
+			doc, err := iter.Next()
+			if errors.Is(err, iterator.Done) {
+				break
+			}
+			if err != nil {
+				log.Printf("Error iterating documents: %v", err)
+				http.Error(w, "Error retrieving data", http.StatusInternalServerError)
+				return
+			}
+			results = append(results, doc.Data())
+		}
+
+		_ = json.NewEncoder(w).Encode(results)
+		return
+	}
+
+	// GET BY ISO CODE
+	iter := h.Client.Collection(utility.RegistrationsCollection).
+		Where("isoCode", "==", isoCode).
+		Documents(ctx)
+	defer iter.Stop()
+
+	var results []map[string]interface{}
+
+	for {
+		doc, err := iter.Next()
+		if errors.Is(err, iterator.Done) {
+			break
+		}
+		if err != nil {
+			log.Printf("Error retrieving document with isoCode %s: %v", isoCode, err)
+			http.Error(w, "Error retrieving data", http.StatusInternalServerError)
+			return
+		}
+		results = append(results, doc.Data())
+	}
+
+	if len(results) == 0 {
+		http.Error(w, "Document not found", http.StatusNotFound)
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(results)
+}
+
 // decodeRegReq decodes the JSON request body into a registration request.
 // Writes a HTTP error response if decoding fails.
 func decodeRegReq(w http.ResponseWriter, r *http.Request, regReq *utility.RegistrationRequest) bool {
@@ -174,16 +209,5 @@ func normalizeFields(regReq *utility.RegistrationRequest) {
 
 	for i, c := range regReq.Features.TargetCurrencies {
 		regReq.Features.TargetCurrencies[i] = strings.ToUpper(strings.TrimSpace(c))
-	}
-}
-
-func (h *Handler) HandleMessage(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodPost:
-		h.AddRegistration(w, r)
-	case http.MethodGet:
-		h.RetrieveAllRegistrations(w, r)
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
