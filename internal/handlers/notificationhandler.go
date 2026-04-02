@@ -49,7 +49,7 @@ func postRequest(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("Webhook " + webhook.Url + " has been registered with ID " + webhook.ID)
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(utility.ContentType, utility.ApplicationJSON)
 	w.WriteHeader(http.StatusCreated)
 
 	err = json.NewEncoder(w).Encode(map[string]string{
@@ -63,7 +63,7 @@ func postRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func getAllWebhooks(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(utility.ContentType, utility.ApplicationJSON)
 	w.WriteHeader(http.StatusOK)
 
 	err := json.NewEncoder(w).Encode(webhooks)
@@ -77,7 +77,7 @@ func getAllWebhooks(w http.ResponseWriter) {
 func getWebhookByID(w http.ResponseWriter, id string) {
 	for index, webhook := range webhooks {
 		if webhook.ID == id {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(utility.ContentType, utility.ApplicationJSON)
 			w.WriteHeader(http.StatusOK)
 
 			err := json.NewEncoder(w).Encode(webhooks[index])
