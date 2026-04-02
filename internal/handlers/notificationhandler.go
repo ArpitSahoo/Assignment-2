@@ -2,10 +2,11 @@ package handlers
 
 import (
 	"assignment-2/internal/utility"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"log"
 	"net/http"
-	"strconv"
 )
 
 var webhooks []utility.RegisterWebhook
@@ -52,7 +53,7 @@ func registerWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	webhook.ID = strconv.Itoa(len(webhooks) + 1)
+	webhook.ID = generateID(w)
 
 	webhooks = append(webhooks, webhook)
 
@@ -118,6 +119,16 @@ func validateWebhook(w http.ResponseWriter, webhook utility.RegisterWebhook) boo
 		}
 	}
 	return false
+}
+
+func generateID(w http.ResponseWriter) string {
+	bytes := make([]byte, 8)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		log.Println("Error generating random ID. Error: ", err)
+		http.Error(w, "Failed to generate ID", http.StatusInternalServerError)
+	}
+	return hex.EncodeToString(bytes)
 }
 
 func getAllWebhooks(w http.ResponseWriter) {
