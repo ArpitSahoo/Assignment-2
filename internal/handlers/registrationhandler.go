@@ -23,25 +23,30 @@ type Handler struct {
 	RegistrationCount atomic.Int64
 }
 
-// HandleMessage routes incoming HTTP requests to the appropriate handler method
+// HandleRegReq routes incoming HTTP requests to the appropriate handler method
 // based on the request method. Supports POST for adding registrations and GET
 // for retrieving registrations. Responds with 405 Method Not Allowed for unsupported methods.
-func (h *Handler) HandleMessage(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleRegReq(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
-		h.AddRegistration(w, r)
+		h.addRegistration(w, r)
 	case http.MethodGet:
+		// TODO: add both GET requests
 		h.handleAllGetRegistration(w, r)
+	case http.MethodPut:
+		h.replaceRegistration(w, r)
+	case http.MethodDelete:
+		h.deleteRegistration(w, r)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
-// AddRegistration handles POST requests to the /registrations endpoint.
+// addRegistration handles POST requests to the /registrations endpoint.
 // It decodes, normalizes and validates the request body, stores a dashboard configuration in
 // Firestore, increments the local registration counter and returns the generated
 // registration ID and last-change timestamp.
-func (h *Handler) AddRegistration(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
@@ -87,6 +92,7 @@ func (h *Handler) AddRegistration(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// TODO: fix line 95-217 to use user IDs to GET registration(s)
 // handleAllGetRegistration handles GET requests to the /registrations endpoint. If an ISO code size
 // is less than 0, the method will fetch all the countries by calling another method.
 // Otherwise, the ISO code is smaller not 2 it will return.
@@ -94,6 +100,7 @@ func (h *Handler) AddRegistration(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleAllGetRegistration(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received %s request", r.Method)
 
+	// TODO: remove strings.ToUpper to preserve ID integrity, rename variable
 	isoCode := strings.ToUpper(strings.TrimSpace(r.PathValue("id")))
 	w.Header().Set("Content-Type", "application/json")
 
@@ -123,7 +130,7 @@ func (h *Handler) handleAllGetRegistration(w http.ResponseWriter, r *http.Reques
 // collects their data into a slice of maps, and encodes the result as JSON.
 // If an error occurs during retrieval, it responds with a 500 Internal Server Error.
 func (h *Handler) GetAllRegistrations(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	ctx := firestoreContext(r)
 	iter := h.Client.Collection(utility.RegistrationsCollection).Documents(ctx)
 	defer iter.Stop()
 
@@ -185,7 +192,7 @@ func (h *Handler) handleHead(w http.ResponseWriter, isoCode string) {
 // it responds with a 500 Internal Server Error.
 // This function assumes the ISO code has already been validated by the caller.
 func (h *Handler) GetRegistrationByISO(w http.ResponseWriter, r *http.Request, isoCode string) {
-	ctx := r.Context()
+	ctx := firestoreContext(r)
 
 	iter := h.Client.Collection(utility.RegistrationsCollection).
 		Where("isoCode", "==", isoCode).
@@ -214,13 +221,13 @@ func (h *Handler) GetRegistrationByISO(w http.ResponseWriter, r *http.Request, i
 	_ = json.NewEncoder(w).Encode(results)
 }
 
-// ReplaceRegistration handles PUT requests to the /registrations/{id} endpoint.
+// replaceRegistration handles PUT requests to the /registrations/{id} endpoint.
 // It decodes, normalizes and validates the request body, replaces the stored registration
 // configuration for the given ID, updates the last-change timestamp, and returns
 // an empty body.
-func (h *Handler) ReplaceRegistration(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) replaceRegistration(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received %s request", r.Method)
-	id := r.PathValue("id")
+	id := strings.TrimSpace(r.PathValue("id"))
 	if id == "" {
 		http.Error(w, "invalid registration id", http.StatusBadRequest)
 		return
@@ -259,6 +266,38 @@ func (h *Handler) ReplaceRegistration(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Replaced registration with ID: %s", id)
 	// Respond with status code 200
 	w.WriteHeader(http.StatusOK)
+}
+
+// deleteRegistration handles DELETE requests to the /registrations/{id} endpoint.
+// Validates the registration ID, ensures the registration exists, then deletes it
+// from FireStore.
+func (h *Handler) deleteRegistration(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Received %s request", r.Method)
+	id := strings.TrimSpace(r.PathValue("id"))
+	if id == "" {
+		http.Error(w, "invalid registration id", http.StatusBadRequest)
+		return
+	}
+
+	ctx := firestoreContext(r)
+
+	// Retrieve the registration connected to the ID
+	_, errGet := h.Client.Collection(utility.RegistrationsCollection).Doc(id).Get(ctx)
+	if errGet != nil {
+		log.Printf("Failed to get registration: %v", errGet)
+		http.Error(w, "registration not found", http.StatusNotFound)
+		return
+	}
+
+	// Delete the registration connected to the ID
+	_, errDel := h.Client.Collection(utility.RegistrationsCollection).Doc(id).Delete(ctx)
+	if errDel != nil {
+		log.Printf("Failed to delete registration: %v", errDel)
+		http.Error(w, "failed deleting registration", http.StatusInternalServerError)
+		return
+	}
+	log.Printf("Deleted registration with ID: %s", id)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // decodeRegReq decodes the JSON request body into a registration request.
