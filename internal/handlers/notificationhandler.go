@@ -15,7 +15,7 @@ var webhooks []utility.RegisterWebhook
 func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
-		postRequest(w, r)
+		registerWebhook(w, r)
 	case http.MethodGet:
 		getAllWebhooks(w)
 	default:
@@ -38,7 +38,7 @@ func WebhookIDHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func postRequest(w http.ResponseWriter, r *http.Request) {
+func registerWebhook(w http.ResponseWriter, r *http.Request) {
 	webhook := utility.RegisterWebhook{}
 	err := json.NewDecoder(r.Body).Decode(&webhook)
 	if err != nil {
@@ -48,7 +48,7 @@ func postRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if validatedFields(w, webhook) {
+	if validateWebhook(w, webhook) {
 		return
 	}
 
@@ -71,7 +71,7 @@ func postRequest(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func validatedFields(w http.ResponseWriter, webhook utility.RegisterWebhook) bool {
+func validateWebhook(w http.ResponseWriter, webhook utility.RegisterWebhook) bool {
 	if webhook.Url == "" {
 		log.Println("Webhook URL is required")
 		http.Error(w, "Webhook URL is required", http.StatusBadRequest)
