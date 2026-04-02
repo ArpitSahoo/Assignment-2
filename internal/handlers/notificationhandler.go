@@ -10,6 +10,8 @@ import (
 
 var webhooks []utility.RegisterWebhook
 
+// WebhookHandler handles requests to the /notifications endpoint,
+// allowing clients to register new webhooks and retrieve all registered webhooks.
 func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
@@ -21,6 +23,8 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// WebhookIDHandler handles requests to the /notifications/{id} endpoint,
+// allowing clients to retrieve or delete a specific webhook by its ID.
 func WebhookIDHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
