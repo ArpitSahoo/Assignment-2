@@ -73,6 +73,7 @@ func postRequest(w http.ResponseWriter, r *http.Request) {
 
 func validatedFields(w http.ResponseWriter, webhook utility.RegisterWebhook) bool {
 	if webhook.Url == "" {
+		log.Println("Webhook URL is required")
 		http.Error(w, "Webhook URL is required", http.StatusBadRequest)
 		return true
 	}
@@ -83,6 +84,7 @@ func validatedFields(w http.ResponseWriter, webhook utility.RegisterWebhook) boo
 	}
 
 	if !validEvents[webhook.Event] {
+		log.Println("Error event must be either REGISTER, CHANGE, DELETE, INVOKE, THRESHOLD")
 		http.Error(w, "Error event must be either REGISTER, CHANGE, DELETE, INVOKE, THRESHOLD",
 			http.StatusBadRequest)
 		return true
@@ -90,6 +92,7 @@ func validatedFields(w http.ResponseWriter, webhook utility.RegisterWebhook) boo
 
 	if webhook.Event == "THRESHOLD" {
 		if webhook.Threshold == nil {
+			log.Println("Error threshold block is required for THRESHOLD event")
 			http.Error(w, "Error threshold block is required for THRESHOLD event",
 				http.StatusBadRequest)
 			return true
@@ -100,6 +103,7 @@ func validatedFields(w http.ResponseWriter, webhook utility.RegisterWebhook) boo
 			"temperature": true, "precipitation": true,
 		}
 		if !validFields[webhook.Threshold.Field] {
+			log.Println("Error threshold field must be: pm25, pm10, temperature, or precipitation")
 			http.Error(w, "error threshold field must be: pm25, pm10, temperature, or precipitation",
 				http.StatusBadRequest)
 			return true
@@ -107,6 +111,7 @@ func validatedFields(w http.ResponseWriter, webhook utility.RegisterWebhook) boo
 
 		validOperators := map[string]bool{">": true, "<": true}
 		if !validOperators[webhook.Threshold.Operator] {
+			log.Println("Error threshold operator must be > or <")
 			http.Error(w, "error: threshold.operator must be > or <",
 				http.StatusBadRequest)
 			return true
@@ -142,6 +147,7 @@ func getWebhookByID(w http.ResponseWriter, id string) {
 			return
 		}
 	}
+	log.Println("Webhook with ID " + id + " is not found")
 	http.Error(w, "Webhook id is not found", http.StatusNotFound)
 }
 
@@ -153,6 +159,6 @@ func deleteWebhook(w http.ResponseWriter, id string) {
 			return
 		}
 	}
-
+	log.Println("Webhook with ID " + id + " is not found")
 	http.Error(w, "Webhook not found", http.StatusNotFound)
 }
