@@ -47,6 +47,11 @@ func postRequest(w http.ResponseWriter, r *http.Request) {
 			"\nPlease check your input JSON.", http.StatusBadRequest)
 		return
 	}
+
+	if validatedFields(w, webhook) {
+		return
+	}
+
 	webhook.ID = strconv.Itoa(len(webhooks) + 1)
 
 	webhooks = append(webhooks, webhook)
@@ -64,6 +69,50 @@ func postRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return
 	}
+}
+
+func validatedFields(w http.ResponseWriter, webhook utility.RegisterWebhook) bool {
+	if webhook.Url == "" {
+		http.Error(w, "Webhook URL is required", http.StatusBadRequest)
+		return true
+	}
+
+	validEvents := map[string]bool{
+		"REGISTER": true, "CHANGE": true,
+		"DELETE": true, "INVOKE": true, "THRESHOLD": true,
+	}
+
+	if !validEvents[webhook.Event] {
+		http.Error(w, "Error event must be either REGISTER, CHANGE, DELETE, INVOKE, THRESHOLD",
+			http.StatusBadRequest)
+		return true
+	}
+
+	if webhook.Event == "THRESHOLD" {
+		if webhook.Threshold == nil {
+			http.Error(w, "Error threshold block is required for THRESHOLD event",
+				http.StatusBadRequest)
+			return true
+		}
+
+		validFields := map[string]bool{
+			"pm25": true, "pm10": true,
+			"temperature": true, "precipitation": true,
+		}
+		if !validFields[webhook.Threshold.Field] {
+			http.Error(w, "error threshold field must be: pm25, pm10, temperature, or precipitation",
+				http.StatusBadRequest)
+			return true
+		}
+
+		validOperators := map[string]bool{">": true, "<": true}
+		if !validOperators[webhook.Threshold.Operator] {
+			http.Error(w, "error: threshold.operator must be > or <",
+				http.StatusBadRequest)
+			return true
+		}
+	}
+	return false
 }
 
 func getAllWebhooks(w http.ResponseWriter) {
