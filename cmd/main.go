@@ -43,9 +43,9 @@ func main() {
 		Client: client,
 	}
 
-	router.HandleFunc(utility.RegistrationPathWithID, handler.HandleMessage)
-	router.HandleFunc(utility.RegistrationPath, handler.HandleMessage)
-	log.Printf("Firestore REST service listening on port %s with URL path %s ...\n", port, utility.RegistrationPathWithID)
+	router.HandleFunc(utility.RegistrationPath, handler.AddRegistration)
+	router.HandleFunc(utility.RegistrationPathID, handler.ReplaceRegistration)
+	log.Printf("Firestore REST service listening on port %s with URL path /%s/ ...\n", port, utility.RegistrationPath)
 	if errSrv := http.ListenAndServe(addr, router); errSrv != nil {
 		panic(errSrv)
 	}
