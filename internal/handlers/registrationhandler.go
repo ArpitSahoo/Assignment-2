@@ -101,6 +101,7 @@ func (h *Handler) RetrieveAllRegistrations(w http.ResponseWriter, r *http.Reques
 	log.Printf("Received %s request", r.Method)
 
 	isoCode := strings.ToUpper(strings.TrimSpace(r.PathValue("id")))
+
 	ctx := r.Context()
 
 	w.Header().Set("Content-Type", "application/json")
@@ -127,6 +128,10 @@ func (h *Handler) RetrieveAllRegistrations(w http.ResponseWriter, r *http.Reques
 
 		_ = json.NewEncoder(w).Encode(results)
 		return
+	} else if len(isoCode) != 2 {
+		http.Error(w, "Invalid iso code", http.StatusBadRequest)
+		log.Printf("Invalid iso code: %s", isoCode)
+		return
 	}
 
 	// GET BY ISO CODE
@@ -152,6 +157,7 @@ func (h *Handler) RetrieveAllRegistrations(w http.ResponseWriter, r *http.Reques
 
 	if len(results) == 0 {
 		http.Error(w, "Document not found", http.StatusNotFound)
+		log.Printf("Document not found: %s", isoCode)
 		return
 	}
 
