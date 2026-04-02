@@ -122,7 +122,6 @@ func (h *Handler) handleAllGetRegistration(w http.ResponseWriter, r *http.Reques
 	}
 
 	h.GetRegistrationByISO(w, r, isoCode)
-	return
 }
 
 // GetAllRegistrations retrieves all registration documents from Firestore and returns them as a
