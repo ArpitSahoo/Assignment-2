@@ -2,6 +2,8 @@ package utility
 
 const RegistrationsCollection = "registrations"
 
+const WebhooksCollection = "webhooks"
+
 const RegistrationPath = "/envdash/v1/registrations/"
 
 const NotificationPath = "/envdash/v1/notifications/{id}"
