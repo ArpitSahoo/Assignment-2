@@ -20,3 +20,10 @@ type Threshold struct {
 	Operator string  `json:"operator"`
 	Value    float64 `json:"value"`
 }
+
+type WebhookInvocationPayload struct {
+	ID      string `json:"id"`
+	Country string `json:"country"`
+	Event   string `json:"event"`
+	Time    string `json:"time"`
+}
