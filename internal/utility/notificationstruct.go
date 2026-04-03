@@ -21,6 +21,7 @@ type Threshold struct {
 	Value    float64 `json:"value"`
 }
 
+// WebhookInvocationPayload represents the JSON body sent when a lifecycle webhook is triggered.
 type WebhookInvocationPayload struct {
 	ID      string `json:"id"`
 	Country string `json:"country"`
