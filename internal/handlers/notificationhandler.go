@@ -2,23 +2,29 @@ package handlers
 
 import (
 	"assignment-2/internal/utility"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
+	"sync/atomic"
+
+	"cloud.google.com/go/firestore"
 )
 
-var webhooks []utility.RegisterWebhook
+// HandlerWebhooks holding shared dependencies and local registration counter.
+type HandlerWebhooks struct {
+	Client       *firestore.Client
+	WebhookCount atomic.Int64
+}
 
 // WebhookHandler handles requests to the /notifications endpoint,
 // allowing clients to register new webhooks and retrieve all registered webhooks.
-func WebhookHandler(w http.ResponseWriter, r *http.Request) {
+func (h *HandlerWebhooks) WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
-		registerWebhook(w, r)
+		h.registerWebhook(w, r)
 	case http.MethodGet:
-		getAllWebhooks(w)
+		h.getAllWebhooks(w, r)
 	default:
 		http.Error(w, "Method "+r.Method+" not supported for "+utility.NotificationPath, http.StatusMethodNotAllowed)
 	}
@@ -26,52 +32,69 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 
 // WebhookIDHandler handles requests to the /notifications/{id} endpoint,
 // allowing clients to retrieve or delete a specific webhook by its ID.
-func WebhookIDHandler(w http.ResponseWriter, r *http.Request) {
+func (h *HandlerWebhooks) WebhookIDHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	switch r.Method {
 	case http.MethodGet:
-		getWebhookByID(w, id)
+		h.getWebhookByID(w, r, id)
 	case http.MethodDelete:
-		deleteWebhook(w, id)
+		h.deleteWebhook(w, r, id)
 	default:
 		http.Error(w, "Method "+r.Method+" not supported for "+utility.NotificationPath, http.StatusMethodNotAllowed)
 	}
 }
 
-func registerWebhook(w http.ResponseWriter, r *http.Request) {
-	webhook := utility.RegisterWebhook{}
-	err := json.NewDecoder(r.Body).Decode(&webhook)
+// registerWebhook processes POST requests to create a new webhook.
+// It validates the input, stores the webhook in Firestore, and returns the ID of the created webhook in the response.
+func (h *HandlerWebhooks) registerWebhook(w http.ResponseWriter, r *http.Request) {
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Printf("Error closing body: %v", err)
+		}
+	}(r.Body)
+
+	var webhookReg utility.RegisterWebhook
+	if err := json.NewDecoder(r.Body).Decode(&webhookReg); err != nil {
+		log.Println("Error decoding webhook registration request: ", err)
+		http.Error(w, "Invalid JSON payload: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if validateWebhook(w, webhookReg) {
+		return
+	}
+
+	ref, _, err := h.Client.Collection(utility.WebhooksCollection).Add(r.Context(), map[string]any{
+		"url":       webhookReg.Url,
+		"country":   webhookReg.Country,
+		"event":     webhookReg.Event,
+		"threshold": webhookReg.Threshold,
+	})
+
 	if err != nil {
-		log.Println("Error during decoding of webhook registration information. Error: ", err)
-		http.Error(w, "Something went wrong during information processing. Error: "+err.Error()+
-			"\nPlease check your input JSON.", http.StatusBadRequest)
+		log.Printf("Failed to add webhook: %v", err)
+		http.Error(w, "Failed to add webhook", http.StatusInternalServerError)
 		return
 	}
 
-	if validateWebhook(w, webhook) {
-		return
-	}
-
-	webhook.ID = generateID(w)
-
-	webhooks = append(webhooks, webhook)
-
-	log.Println("Webhook " + webhook.Url + " has been registered with ID " + webhook.ID)
+	log.Println("Webhook created with ID: ", ref.ID)
 
 	w.Header().Set(utility.ContentType, utility.ApplicationJSON)
 	w.WriteHeader(http.StatusCreated)
 
-	err = json.NewEncoder(w).Encode(map[string]string{
-		"id": webhook.ID,
-	})
-	if err != nil {
-		log.Println("JSON encoding failed. Error:", err)
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-		return
+	if err := json.NewEncoder(w).Encode(utility.WebhookResponse{
+		ID: ref.ID,
+	}); err != nil {
+		log.Printf("Failed to encode webhook response: %v", err)
 	}
+
 }
 
+// validateWebhook checks the validity of the webhook registration request.
+// It ensures that the URL is provided, the event type is valid, and that threshold conditions are correctly specified for THRESHOLD events.
+// If any validation fails, it sends an appropriate error response and returns true. If all validations pass, it returns false.
 func validateWebhook(w http.ResponseWriter, webhook utility.RegisterWebhook) bool {
 	if webhook.Url == "" {
 		log.Println("Webhook URL is required")
@@ -88,6 +111,12 @@ func validateWebhook(w http.ResponseWriter, webhook utility.RegisterWebhook) boo
 		log.Println("Error event must be either REGISTER, CHANGE, DELETE, INVOKE, THRESHOLD")
 		http.Error(w, "Error event must be either REGISTER, CHANGE, DELETE, INVOKE, THRESHOLD",
 			http.StatusBadRequest)
+		return true
+	}
+
+	if webhook.Event != "THRESHOLD" && webhook.Threshold != nil {
+		log.Println("Threshold block is only allowed for THRESHOLD event")
+		http.Error(w, "Threshold block is only allowed for THRESHOLD event", http.StatusBadRequest)
 		return true
 	}
 
@@ -121,55 +150,80 @@ func validateWebhook(w http.ResponseWriter, webhook utility.RegisterWebhook) boo
 	return false
 }
 
-func generateID(w http.ResponseWriter) string {
-	bytes := make([]byte, 8)
-	_, err := rand.Read(bytes)
+// getAllWebhooks retrieves all registered webhooks from Firestore and returns them as a JSON array in the response.
+// If there is an error during retrieval, it returns an appropriate error response and logs it.
+func (h *HandlerWebhooks) getAllWebhooks(w http.ResponseWriter, r *http.Request) {
+	docs, err := h.Client.Collection(utility.WebhooksCollection).Documents(r.Context()).GetAll()
 	if err != nil {
-		log.Println("Error generating random ID. Error: ", err)
-		http.Error(w, "Failed to generate ID", http.StatusInternalServerError)
+		log.Printf("Error retrieving webhooks: %v", err)
+		http.Error(w, "Error retrieving webhooks: "+err.Error(), http.StatusInternalServerError)
+		return
 	}
-	return hex.EncodeToString(bytes)
-}
 
-func getAllWebhooks(w http.ResponseWriter) {
+	var webhooks []utility.RegisterWebhook
+	for _, doc := range docs {
+		var webhook utility.RegisterWebhook
+		if err := doc.DataTo(&webhook); err != nil {
+			log.Printf("Error converting document to webhook: %v", err)
+			continue
+		}
+		webhook.ID = doc.Ref.ID
+		webhooks = append(webhooks, webhook)
+	}
+
 	w.Header().Set(utility.ContentType, utility.ApplicationJSON)
 	w.WriteHeader(http.StatusOK)
 
-	err := json.NewEncoder(w).Encode(webhooks)
+	if err := json.NewEncoder(w).Encode(webhooks); err != nil {
+		log.Println("Error encoding webhooks response: ", err)
+	}
+}
+
+// getWebhookByID retrieves a specific webhook by its ID from Firestore and returns it as a JSON object in the response.
+// If the webhook is not found or if there is an error during retrieval, it returns an appropriate error response and logs it.
+func (h *HandlerWebhooks) getWebhookByID(w http.ResponseWriter, r *http.Request, id string) {
+	doc, err := h.Client.Collection(utility.WebhooksCollection).Doc(id).Get(r.Context())
 	if err != nil {
-		log.Println("Error during encoding of webhook registration information. Error: ", err)
-		http.Error(w, "Something went wrong during webhook information processing: "+err.Error(), http.StatusInternalServerError)
+		log.Printf("Error retrieving webhook with ID %s: %v", id, err)
+		http.Error(w, "Webhook not found: "+err.Error(), http.StatusNotFound)
 		return
 	}
+
+	var webhook utility.RegisterWebhook
+	if err := doc.DataTo(&webhook); err != nil {
+		log.Printf("Error converting document to webhook: %v", err)
+		http.Error(w, "Error processing webhook data: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	webhook.ID = doc.Ref.ID
+
+	w.Header().Set(utility.ContentType, utility.ApplicationJSON)
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(webhook); err != nil {
+		log.Println("Error encoding webhook: ", err)
+		http.Error(w, "Something went wrong during webhook information processing: "+err.Error(), http.StatusInternalServerError)
+	}
 }
 
-func getWebhookByID(w http.ResponseWriter, id string) {
-	for index, webhook := range webhooks {
-		if webhook.ID == id {
-			w.Header().Set(utility.ContentType, utility.ApplicationJSON)
-			w.WriteHeader(http.StatusOK)
-
-			err := json.NewEncoder(w).Encode(webhooks[index])
-			if err != nil {
-				log.Println("Error during encoding of webhook registration information. Error: ", err)
-				http.Error(w, "Something went wrong during webhook information processing: "+err.Error(), http.StatusInternalServerError)
-				return
-			}
-			return
-		}
+// deleteWebhook removes a specific webhook by its ID from Firestore.
+// It first checks if the webhook exists, and if it does, it deletes it and returns a 204 No Content status.
+// If the webhook is not found or if there is an error during deletion, it returns an appropriate error response and logs it.
+func (h *HandlerWebhooks) deleteWebhook(w http.ResponseWriter, r *http.Request, id string) {
+	_, err := h.Client.Collection(utility.WebhooksCollection).Doc(id).Get(r.Context())
+	if err != nil {
+		log.Println("Webhook with ID " + id + " not found")
+		http.Error(w, "Webhook not found", http.StatusNotFound)
+		return
 	}
-	log.Println("Webhook with ID " + id + " is not found")
-	http.Error(w, "Webhook id is not found", http.StatusNotFound)
-}
 
-func deleteWebhook(w http.ResponseWriter, id string) {
-	for index, webhook := range webhooks {
-		if webhook.ID == id {
-			webhooks = append(webhooks[:index], webhooks[index+1:]...)
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
+	_, err = h.Client.Collection(utility.WebhooksCollection).Doc(id).Delete(r.Context())
+	if err != nil {
+		log.Printf("Error deleting webhook: %v", err)
+		http.Error(w, "Failed to delete webhook", http.StatusInternalServerError)
+		return
 	}
-	log.Println("Webhook with ID " + id + " is not found")
-	http.Error(w, "Webhook not found", http.StatusNotFound)
+
+	w.WriteHeader(http.StatusNoContent)
+	log.Println("Webhook with ID ", id, " deleted successfully")
 }
