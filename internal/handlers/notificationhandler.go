@@ -165,6 +165,7 @@ func (h *HandlerWebhooks) getAllWebhooks(w http.ResponseWriter, r *http.Request)
 		var webhook utility.RegisterWebhook
 		if err := doc.DataTo(&webhook); err != nil {
 			log.Printf("Error converting document to webhook: %v", err)
+			http.Error(w, "Error processing webhook data: "+err.Error(), http.StatusInternalServerError)
 			continue
 		}
 		webhook.ID = doc.Ref.ID
@@ -176,6 +177,7 @@ func (h *HandlerWebhooks) getAllWebhooks(w http.ResponseWriter, r *http.Request)
 
 	if err := json.NewEncoder(w).Encode(webhooks); err != nil {
 		log.Println("Error encoding webhooks response: ", err)
+		http.Error(w, "Something went wrong during webhooks information processing: "+err.Error(), http.StatusInternalServerError)
 	}
 }
 
