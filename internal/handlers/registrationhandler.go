@@ -23,6 +23,17 @@ type Handler struct {
 	RegistrationCount atomic.Int64
 }
 
+// addRegistrationDocImpl stores a registration document, returns a generated ID.
+// Added as a variable to allow for replacement in tests.
+var addRegistrationDocImpl = func(ctx context.Context, client *firestore.Client, reg map[string]any) (string, error) {
+	ref, _, err := client.Collection(utility.RegistrationsCollection).Add(ctx, reg)
+	if err != nil {
+		log.Printf("Error adding registration document: %v", err)
+		return "", err
+	}
+	return ref.ID, nil
+}
+
 // HandleRegReq routes incoming HTTP requests to the appropriate handler method
 // based on the request method. Supports POST for adding registrations and GET
 // for retrieving registrations. Responds with 405 Method Not Allowed for unsupported methods.
@@ -65,8 +76,7 @@ func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 	ctx := firestoreContext(r)
 	lastChange := currentLastChange()
 
-	// Store registration payload in Firestore and let Firestore generate document ID.
-	ref, _, err := h.Client.Collection(utility.RegistrationsCollection).Add(ctx, map[string]any{
+	id, err := addRegistrationDocImpl(ctx, h.Client, map[string]any{
 		"country":    regReq.Country,
 		"isoCode":    regReq.IsoCode,
 		"features":   regReq.Features,
@@ -78,7 +88,7 @@ func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Registration created with ID: %s", ref.ID)
+	log.Printf("Registration created with ID: %s", id)
 	// Increase the local registration count by one instance
 	h.RegistrationCount.Add(1)
 
@@ -88,7 +98,7 @@ func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 
 	// Encode the response body as JSON
-	encodeRegResp(w, ref, lastChange)
+	encodeRegResp(w, id, lastChange)
 
 }
 
@@ -312,9 +322,9 @@ func decodeRegReq(w http.ResponseWriter, r *http.Request, regReq *utility.Regist
 
 // encodeRegResp encodes a registration response as JSON and logs an error if
 // encoding fails.
-func encodeRegResp(w http.ResponseWriter, ref *firestore.DocumentRef, lastChange string) {
+func encodeRegResp(w http.ResponseWriter, id, lastChange string) {
 	if err := json.NewEncoder(w).Encode(utility.RegistrationResponse{
-		ID:         ref.ID,
+		ID:         id,
 		LastChange: lastChange,
 	}); err != nil {
 		log.Printf("Failed to encode registration response: %v", err)
@@ -351,6 +361,13 @@ func validateRegReq(w http.ResponseWriter, regReq utility.RegistrationRequest) b
 	if regReq.Country == "" {
 		http.Error(w, "missing country", http.StatusBadRequest)
 		return true
+	}
+
+	for _, m := range regReq.Country {
+		if !unicode.IsLetter(m) {
+			http.Error(w, "Country must contain only letters", http.StatusBadRequest)
+			return true
+		}
 	}
 
 	return false
