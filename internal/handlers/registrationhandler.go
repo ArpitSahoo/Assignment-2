@@ -31,7 +31,6 @@ func (h *Handler) HandleRegReq(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		h.addRegistration(w, r)
 	case http.MethodGet:
-		// TODO: add both GET requests
 		h.handleAllGetRegistration(w, r)
 	case http.MethodPut:
 		h.replaceRegistration(w, r)
@@ -92,37 +91,34 @@ func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 
 }
 
-// TODO: fix line 95-217 to use user IDs to GET registration(s)
 // handleAllGetRegistration handles GET requests to the /registrations endpoint. If an ISO code size
 // is less than 0, the method will fetch all the countries by calling another method.
 // Otherwise, the ISO code is smaller not 2 it will return.
 // If the ISO code is valid, it will fetch the country with the provided ISO code by calling another method.
 func (h *Handler) handleAllGetRegistration(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received %s request", r.Method)
-
-	// TODO: remove strings.ToUpper to preserve ID integrity, rename variable
-	isoCode := strings.ToUpper(strings.TrimSpace(r.PathValue("id")))
+	docID := r.PathValue("id")
 	w.Header().Set("Content-Type", "application/json")
 
 	// HEAD → return headers only
 	if r.Method == http.MethodHead {
-		h.handleHead(w, isoCode)
+		h.handleHead(r, w, docID)
 		return
 	}
 
 	// GET logic
-	if len(isoCode) == 0 {
+	if len(docID) == 0 {
 		h.GetAllRegistrations(w, r)
 		return
 	}
 
 	// If an ISO code is provided, validate it before querying Firestore
-	if len(isoCode) != 2 {
-		http.Error(w, "Invalid iso code", http.StatusBadRequest)
+	if len(docID) != 20 {
+		http.Error(w, "Invalid document ID, the document must be 20 characters", http.StatusBadRequest)
 		return
 	}
 
-	h.GetRegistrationByISO(w, r, isoCode)
+	h.GetRegistrationByID(w, r, docID)
 }
 
 // GetAllRegistrations retrieves all registration documents from Firestore and returns them as a
@@ -158,25 +154,30 @@ func (h *Handler) GetAllRegistrations(w http.ResponseWriter, r *http.Request) {
 // as required by the HTTP HEAD method.
 // This method mirrors the validation and lookup logic of the GET handler,
 // but intentionally omits writing any response body, as required by the HTTP HEAD method.
-func (h *Handler) handleHead(w http.ResponseWriter, isoCode string) {
-	if len(isoCode) == 0 {
+func (h *Handler) handleHead(r *http.Request, w http.ResponseWriter, docID string) {
+	docID = strings.TrimSpace(docID)
+
+	// Checks if the docID is empty, if empty it will return a status code of 200.
+	if len(docID) == 0 {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	if len(isoCode) != 2 {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+	// If the docID is the valid length of 20 characters, if not valid it returns status code 400
+	/*
+		if len(docID) != 20 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		NOT NEEDED ?
+	*/
 
-	// Check if ISO exists without returning body
-	ctx := context.Background()
-	iter := h.Client.Collection(utility.RegistrationsCollection).
-		Where("isoCode", "==", isoCode).
-		Documents(ctx)
+	ctx := r.Context()
 
-	_, err := iter.Next()
-	if errors.Is(err, iterator.Done) {
+	// Checks if the document with the provided docID exists in Firestore.
+	//If it does not exist, it will return a status code of 404.
+	_, err := h.Client.Collection(utility.RegistrationsCollection).Doc(docID).Get(ctx)
+	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -184,41 +185,22 @@ func (h *Handler) handleHead(w http.ResponseWriter, isoCode string) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// GetRegistrationByISO handles a GET request that retrieves registration data
-// for a specific country identified by its ISO code. It queries the Firestore "registrations"
-// collection for documents where the "isoCode" field matches the provided ISO code,
-// collects the matching documents into a slice of maps, and encodes the result as JSON in the response body.
-// If no matching documents are found, it responds with a 404 Not Found status. If an error occurs during retrieval,
-// it responds with a 500 Internal Server Error.
-// This function assumes the ISO code has already been validated by the caller.
-func (h *Handler) GetRegistrationByISO(w http.ResponseWriter, r *http.Request, isoCode string) {
+// GetRegistrationByID handles a GET request that retrieves registration data
+// for a specific country identified by its document ID. It goes through firebase
+// query and check if there is a similar Documents with that ID and returns the
+// matching documents as a JSON. if not it returns a status code of 404 not found.
+func (h *Handler) GetRegistrationByID(w http.ResponseWriter, r *http.Request, docID string) {
 	ctx := firestoreContext(r)
 
-	iter := h.Client.Collection(utility.RegistrationsCollection).
-		Where("isoCode", "==", isoCode).
-		Documents(ctx)
-	defer iter.Stop()
-
-	var results []map[string]interface{}
-
-	for {
-		doc, err := iter.Next()
-		if errors.Is(err, iterator.Done) {
-			break
-		}
-		if err != nil {
-			http.Error(w, "Error retrieving data", http.StatusInternalServerError)
-			return
-		}
-		results = append(results, doc.Data())
+	// Query Firestore for documents where the "docID" field matches the provided id
+	docResults, err := h.Client.Collection(utility.RegistrationsCollection).Doc(docID).Get(ctx)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		http.Error(w, "Registration not found", http.StatusNotFound)
 	}
 
-	if len(results) == 0 {
-		http.Error(w, "Document not found", http.StatusNotFound)
-		return
-	}
-
-	_ = json.NewEncoder(w).Encode(results)
+	// Encode the matching documents as JSON in the response body
+	_ = json.NewEncoder(w).Encode(docResults.Data())
 }
 
 // replaceRegistration handles PUT requests to the /registrations/{id} endpoint.
