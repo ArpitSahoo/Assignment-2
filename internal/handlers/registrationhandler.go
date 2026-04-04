@@ -97,7 +97,7 @@ func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 // If the ISO code is valid, it will fetch the country with the provided ISO code by calling another method.
 func (h *Handler) handleAllGetRegistration(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received %s request", r.Method)
-	docID := r.PathValue("id")
+	docID := strings.TrimSpace(r.PathValue("id"))
 	w.Header().Set("Content-Type", "application/json")
 
 	// HEAD → return headers only
@@ -144,7 +144,6 @@ func (h *Handler) GetAllRegistrations(w http.ResponseWriter, r *http.Request) {
 		}
 		results = append(results, doc.Data())
 	}
-
 	_ = json.NewEncoder(w).Encode(results)
 }
 
@@ -160,6 +159,7 @@ func (h *Handler) handleHead(r *http.Request, w http.ResponseWriter, docID strin
 	// Checks if the docID is empty, if empty it will return a status code of 200.
 	if len(docID) == 0 {
 		w.WriteHeader(http.StatusOK)
+		log.Printf("Received %s request", r.Method)
 		return
 	}
 
@@ -179,6 +179,7 @@ func (h *Handler) handleHead(r *http.Request, w http.ResponseWriter, docID strin
 	_, err := h.Client.Collection(utility.RegistrationsCollection).Doc(docID).Get(ctx)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
+		log.Printf("Document %s does not exist", docID)
 		return
 	}
 
@@ -197,6 +198,8 @@ func (h *Handler) GetRegistrationByID(w http.ResponseWriter, r *http.Request, do
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		http.Error(w, "Registration not found", http.StatusNotFound)
+		log.Printf("Registration with ID %s not found: %v", docID, err)
+		return
 	}
 
 	// Encode the matching documents as JSON in the response body
