@@ -24,14 +24,27 @@ type Handler struct {
 }
 
 // addRegistrationDocImpl stores a registration document, returns a generated ID.
-// Added as a variable to allow for replacement in tests.
+// Defined as variable to allow for replacement in tests.
 var addRegistrationDocImpl = func(ctx context.Context, client *firestore.Client, reg map[string]any) (string, error) {
 	ref, _, err := client.Collection(utility.RegistrationsCollection).Add(ctx, reg)
 	if err != nil {
-		log.Printf("Error adding registration document: %v", err)
 		return "", err
 	}
 	return ref.ID, nil
+}
+
+// getRegistrationDoc retrieves a registration document registered to a specific
+// registration ID. Defined as variable to allow for replacement in tests.
+var getRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
+	_, err := client.Collection(utility.RegistrationsCollection).Doc(id).Get(ctx)
+	return err
+}
+
+// setRegistrationDoc updates a registration document registered to a specific
+// registration ID. Defined as variable to allow for replacement in tests.
+var setRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string, reg map[string]any) error {
+	_, err := client.Collection(utility.RegistrationsCollection).Doc(id).Set(ctx, reg)
+	return err
 }
 
 // HandleRegReq routes incoming HTTP requests to the appropriate handler method
@@ -102,7 +115,8 @@ func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 
 }
 
-// TODO: fix line 95-217 to use user IDs to GET registration(s)
+// TODO: fix handleAllGetRegistration, GetAllRegistration, handleHead, GetAllRegistrationByISO
+
 // handleAllGetRegistration handles GET requests to the /registrations endpoint. If an ISO code size
 // is less than 0, the method will fetch all the countries by calling another method.
 // Otherwise, the ISO code is smaller not 2 it will return.
@@ -253,7 +267,7 @@ func (h *Handler) replaceRegistration(w http.ResponseWriter, r *http.Request) {
 	lastChange := currentLastChange()
 
 	// Gets a stored registration for specific ID
-	_, errGet := h.Client.Collection(utility.RegistrationsCollection).Doc(id).Get(ctx)
+	errGet := getRegistrationDoc(ctx, h.Client, id)
 	if errGet != nil {
 		log.Printf("Failed to get registration: %v", errGet)
 		http.Error(w, "failed getting registration", http.StatusNotFound)
@@ -261,7 +275,7 @@ func (h *Handler) replaceRegistration(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Updates registration for the specific ID
-	_, errSet := h.Client.Collection(utility.RegistrationsCollection).Doc(id).Set(ctx, map[string]any{
+	errSet := setRegistrationDoc(ctx, h.Client, id, map[string]any{
 		"country":    regReq.Country,
 		"isoCode":    regReq.IsoCode,
 		"features":   regReq.Features,
