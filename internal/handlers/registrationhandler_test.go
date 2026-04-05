@@ -38,7 +38,12 @@ func TestHandleAllGetRegistrationInvalidDocIDLength(t *testing.T) {
 	h.handleAllGetRegistration(w, req)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	assert.Equal(t, "text/plain; charset=utf-8", resp.Header.Get("Content-Type"))
@@ -54,7 +59,12 @@ func TestHandleRegReqGetInvalidDocIDLength(t *testing.T) {
 	h.HandleRegReq(w, req)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 }
@@ -68,7 +78,12 @@ func TestHandleAllGetRegistrationHeadNoID(t *testing.T) {
 	h.handleAllGetRegistration(w, req)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
@@ -84,7 +99,12 @@ func TestHandleAllGetRegistrationHeadWhitespaceID(t *testing.T) {
 	h.handleAllGetRegistration(w, req)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
@@ -107,7 +127,12 @@ func TestGetAllRegistrationsSuccess(t *testing.T) {
 	h.GetAllRegistrations(w, req)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal()
+		}
+	}(resp.Body)
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -133,7 +158,12 @@ func TestGetAllRegistrationsError(t *testing.T) {
 	h.GetAllRegistrations(w, req)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
 
 	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 }
@@ -152,7 +182,12 @@ func TestGetAllRegistrationsEmpty(t *testing.T) {
 	h.GetAllRegistrations(w, req)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal()
+		}
+	}(resp.Body)
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -179,7 +214,12 @@ func TestGetRegistrationByIDSuccess(t *testing.T) {
 	h.GetRegistrationByID(w, req, "mockid1234567890123")
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -204,7 +244,12 @@ func TestGetRegistrationByIDNotFound(t *testing.T) {
 	h.GetRegistrationByID(w, req, "missingid1234567890")
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
 
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
@@ -225,7 +270,12 @@ func TestGetRegistrationByIDBackendErrorAlso404_CurrentBehavior(t *testing.T) {
 	h.GetRegistrationByID(w, req, "anyid1234567890123")
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
 
 	// Matches current production behavior: any error maps to 404.
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
