@@ -15,7 +15,7 @@ import (
 // such as REGISTER, CHANGE, DELETE, and INVOKE. It loads stored webhook
 // registrations, filters matching subscriptions by event and country, and
 // sends a JSON POST request to each matching webhook URL.
-func (h *HandlerWebhooks) triggerLifecycleWebhooks(ctx context.Context, event string, country string) {
+func (h *Handler) triggerLifecycleWebhooks(ctx context.Context, event string, country string) {
 	webhooks, err := h.getAllStoredWebhooks(ctx)
 	if err != nil {
 		log.Printf("Error retrieving webhooks: %v", err)
@@ -46,7 +46,7 @@ func (h *HandlerWebhooks) triggerLifecycleWebhooks(ctx context.Context, event st
 
 // getAllStoredWebhooks retrieves all registered webhooks from the Firestore collection.
 // It returns a slice of RegisterWebhook structs or an error if the retrieval fails.
-func (h *HandlerWebhooks) getAllStoredWebhooks(ctx context.Context) ([]utility.RegisterWebhook, error) {
+func (h *Handler) getAllStoredWebhooks(ctx context.Context) ([]utility.RegisterWebhook, error) {
 	docs, err := h.Client.Collection(utility.WebhooksCollection).Documents(ctx).GetAll()
 	if err != nil {
 		return nil, err
