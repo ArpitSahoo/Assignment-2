@@ -23,6 +23,37 @@ type Handler struct {
 	RegistrationCount atomic.Int64
 }
 
+// addRegistrationDocImpl stores a registration document, returns a generated ID.
+// Defined as variable to allow for replacement in tests.
+var addRegistrationDocImpl = func(ctx context.Context, client *firestore.Client, reg map[string]any) (string, error) {
+	ref, _, err := client.Collection(utility.RegistrationsCollection).Add(ctx, reg)
+	if err != nil {
+		return "", err
+	}
+	return ref.ID, nil
+}
+
+// getRegistrationDoc retrieves a registration document registered to a specific
+// registration ID. Defined as variable to allow for replacement in tests.
+var getRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
+	_, err := client.Collection(utility.RegistrationsCollection).Doc(id).Get(ctx)
+	return err
+}
+
+// setRegistrationDoc updates a registration document registered to a specific
+// registration ID. Defined as variable to allow for replacement in tests.
+var setRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string, reg map[string]any) error {
+	_, err := client.Collection(utility.RegistrationsCollection).Doc(id).Set(ctx, reg)
+	return err
+}
+
+// deleteRegistrationDoc deletes a registration document registered to a specific
+// registration ID. Defined as variable to allow for replacement in tests.
+var deleteRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
+	_, err := client.Collection(utility.RegistrationsCollection).Doc(id).Delete(ctx)
+	return err
+}
+
 // HandleRegReq routes incoming HTTP requests to the appropriate handler method
 // based on the request method. Supports POST for adding registrations and GET
 // for retrieving registrations. Responds with 405 Method Not Allowed for unsupported methods.
@@ -64,8 +95,7 @@ func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 	ctx := firestoreContext(r)
 	lastChange := currentLastChange()
 
-	// Store registration payload in Firestore and let Firestore generate document ID.
-	ref, _, err := h.Client.Collection(utility.RegistrationsCollection).Add(ctx, map[string]any{
+	id, err := addRegistrationDocImpl(ctx, h.Client, map[string]any{
 		"country":    regReq.Country,
 		"isoCode":    regReq.IsoCode,
 		"features":   regReq.Features,
@@ -77,7 +107,7 @@ func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Registration created with ID: %s", ref.ID)
+	log.Printf("Registration created with ID: %s", id)
 	// Increase the local registration count by one instance
 	h.RegistrationCount.Add(1)
 
@@ -87,7 +117,7 @@ func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 
 	// Encode the response body as JSON
-	encodeRegResp(w, ref, lastChange)
+	encodeRegResp(w, id, lastChange)
 
 }
 
@@ -218,7 +248,7 @@ func (h *Handler) replaceRegistration(w http.ResponseWriter, r *http.Request) {
 	lastChange := currentLastChange()
 
 	// Gets a stored registration for specific ID
-	_, errGet := h.Client.Collection(utility.RegistrationsCollection).Doc(id).Get(ctx)
+	errGet := getRegistrationDoc(ctx, h.Client, id)
 	if errGet != nil {
 		log.Printf("Failed to get registration: %v", errGet)
 		http.Error(w, "failed getting registration", http.StatusNotFound)
@@ -226,7 +256,7 @@ func (h *Handler) replaceRegistration(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Updates registration for the specific ID
-	_, errSet := h.Client.Collection(utility.RegistrationsCollection).Doc(id).Set(ctx, map[string]any{
+	errSet := setRegistrationDoc(ctx, h.Client, id, map[string]any{
 		"country":    regReq.Country,
 		"isoCode":    regReq.IsoCode,
 		"features":   regReq.Features,
@@ -257,7 +287,7 @@ func (h *Handler) deleteRegistration(w http.ResponseWriter, r *http.Request) {
 	ctx := firestoreContext(r)
 
 	// Retrieve the registration connected to the ID
-	_, errGet := h.Client.Collection(utility.RegistrationsCollection).Doc(id).Get(ctx)
+	errGet := getRegistrationDoc(ctx, h.Client, id)
 	if errGet != nil {
 		log.Printf("Failed to get registration: %v", errGet)
 		http.Error(w, "registration not found", http.StatusNotFound)
@@ -265,7 +295,7 @@ func (h *Handler) deleteRegistration(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Delete the registration connected to the ID
-	_, errDel := h.Client.Collection(utility.RegistrationsCollection).Doc(id).Delete(ctx)
+	errDel := deleteRegistrationDoc(ctx, h.Client, id)
 	if errDel != nil {
 		log.Printf("Failed to delete registration: %v", errDel)
 		http.Error(w, "failed deleting registration", http.StatusInternalServerError)
@@ -287,9 +317,9 @@ func decodeRegReq(w http.ResponseWriter, r *http.Request, regReq *utility.Regist
 
 // encodeRegResp encodes a registration response as JSON and logs an error if
 // encoding fails.
-func encodeRegResp(w http.ResponseWriter, ref *firestore.DocumentRef, lastChange string) {
+func encodeRegResp(w http.ResponseWriter, id, lastChange string) {
 	if err := json.NewEncoder(w).Encode(utility.RegistrationResponse{
-		ID:         ref.ID,
+		ID:         id,
 		LastChange: lastChange,
 	}); err != nil {
 		log.Printf("Failed to encode registration response: %v", err)
@@ -326,6 +356,13 @@ func validateRegReq(w http.ResponseWriter, regReq utility.RegistrationRequest) b
 	if regReq.Country == "" {
 		http.Error(w, "missing country", http.StatusBadRequest)
 		return true
+	}
+
+	for _, m := range regReq.Country {
+		if !unicode.IsLetter(m) {
+			http.Error(w, "Country must contain only letters", http.StatusBadRequest)
+			return true
+		}
 	}
 
 	return false
