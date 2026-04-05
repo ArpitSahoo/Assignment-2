@@ -183,7 +183,7 @@ func (h *Handler) handleAllGetRegistration(w http.ResponseWriter, r *http.Reques
 }
 
 // GetAllRegistrations retrieves all registration documents from Firestore and returns them as a
-// JSON array in the response body. It iterates through all documents in the "registrations" collection, 4
+// JSON array in the response body. It iterates through all documents in the "registrations" collection,
 // collects their data into a slice of maps, and encodes the result as JSON.
 // If an error occurs during retrieval, it responds with a 500 Internal Server Error.
 func (h *Handler) GetAllRegistrations(w http.ResponseWriter, r *http.Request) {
@@ -192,6 +192,7 @@ func (h *Handler) GetAllRegistrations(w http.ResponseWriter, r *http.Request) {
 	results, err := listRegistrationDocs(ctx, h.Client)
 	if err != nil {
 		http.Error(w, "Error retrieving data", http.StatusInternalServerError)
+		log.Printf("Failed to list registration documents: %v", err)
 		return
 	}
 
