@@ -91,11 +91,11 @@ func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 
 }
 
-// handleAllGetRegistration handles all the GET requests to the /registrations endpoint.
-// It checks if the request is a HEAD or GET request, and if an ID is provided in the path.
-// If it's a HEAD request, it calls the handleHead method to return only headers.
-// If it's a GET request without an ID, it retrieves all registrations. If an ID is provided,
-// it validates the ID and retrieves the specific registration by ID.
+// handleAllGetRegistration handles GET requests to the /registrations endpoint.
+// If the request method is HEAD, delegates to handleHead to return status/headers only
+// If no ID is provided in the path, it retrieves all registrations.
+// If an ID is provided, it validates the ID length before fetching
+// the corresponding registration document from Firestore.
 func (h *Handler) handleAllGetRegistration(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received %s request", r.Method)
 	docID := strings.TrimSpace(r.PathValue("id"))
