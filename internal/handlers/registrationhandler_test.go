@@ -102,7 +102,7 @@ func TestHandleRegReqGetInvalidDocIDLength(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 }
 
-func TestHandleAllGetRegistrationHeadNoID(t *testing.T) {
+func TestHandleAllGetRegistrationHeadNoIDReturnsStatusOK(t *testing.T) {
 	h := &Handler{}
 
 	req := httptest.NewRequest(http.MethodHead, "/envdash/v1/registrations", nil)
@@ -122,7 +122,7 @@ func TestHandleAllGetRegistrationHeadNoID(t *testing.T) {
 	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
 }
 
-func TestHandleAllGetRegistrationHeadWhitespaceID(t *testing.T) {
+func TestHandleAllGetRegistrationHeadWhitespaceIDStatusOK(t *testing.T) {
 	h := &Handler{}
 
 	req := httptest.NewRequest(http.MethodHead, "/envdash/v1/registrations/{id}", nil)
@@ -201,7 +201,7 @@ func TestGetAllRegistrationsError(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 }
 
-func TestGetAllRegistrationsEmpty(t *testing.T) {
+func TestGetAllFromEmptyRegistrationsReturnsOK(t *testing.T) {
 	origin := listRegistrationDocs
 	listRegistrationDocs = func(ctx context.Context, client *firestore.Client) ([]map[string]interface{}, error) {
 		return []map[string]interface{}{}, nil
@@ -263,7 +263,7 @@ func TestGetRegistrationByIDSuccess(t *testing.T) {
 	assert.Equal(t, "NO", got["isoCode"])
 }
 
-func TestGetRegistrationByIDNotFound(t *testing.T) {
+func TestGetRegistrationByIDWhenNotFoundReturns404(t *testing.T) {
 	origin := getRegistrationByIDDocImpl
 	getRegistrationByIDDocImpl = func(ctx context.Context, client *firestore.Client, id string) (map[string]any, error) {
 		return nil, errors.New("not found")
@@ -287,7 +287,7 @@ func TestGetRegistrationByIDNotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
-func TestGetRegistrationByIDBackendErrorAlso404_CurrentBehavior(t *testing.T) {
+func TestGetRegistrationByID_FirestoreError_Returns404(t *testing.T) {
 	//This test checks the current behavior of GetRegistrationByID when Firestore returns any error.
 	origin := getRegistrationByIDDocImpl //Save original function
 	getRegistrationByIDDocImpl = func(ctx context.Context, client *firestore.Client, id string) (map[string]any, error) {
