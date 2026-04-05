@@ -49,6 +49,34 @@ func TestHandleAllGetRegistrationInvalidDocIDLength(t *testing.T) {
 	assert.Equal(t, "text/plain; charset=utf-8", resp.Header.Get("Content-Type"))
 }
 
+func TestHandleAllGetRegistrationGetNoIDCallsGetAll(t *testing.T) {
+	origin := listRegistrationDocs
+	listRegistrationDocs = func(ctx context.Context, client *firestore.Client) ([]map[string]interface{}, error) {
+		return []map[string]interface{}{
+			{"country": "Norway", "isoCode": "NO"},
+		}, nil
+	}
+	t.Cleanup(func() { listRegistrationDocs = origin })
+
+	h := &Handler{}
+	req := httptest.NewRequest(http.MethodGet, "/envdash/v1/registrations", nil)
+	w := httptest.NewRecorder()
+
+	h.handleAllGetRegistration(w, req)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+
+	var got []map[string]interface{}
+	err := json.NewDecoder(resp.Body).Decode(&got)
+	assert.NoError(t, err)
+	assert.Len(t, got, 1)
+	assert.Equal(t, "Norway", got[0]["country"])
+}
+
 func TestHandleRegReqGetInvalidDocIDLength(t *testing.T) {
 	h := &Handler{}
 
@@ -279,6 +307,45 @@ func TestGetRegistrationByIDBackendErrorAlso404_CurrentBehavior(t *testing.T) {
 
 	// Matches current production behavior: any error maps to 404.
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestHandleHeadDocIDNotFoundReturns404(t *testing.T) {
+	origin := getRegistrationDoc
+	getRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
+		return errors.New("not found")
+	}
+	t.Cleanup(func() { getRegistrationDoc = origin })
+
+	h := &Handler{}
+	req := httptest.NewRequest(http.MethodHead, "/envdash/v1/registrations/{id}", nil)
+	w := httptest.NewRecorder()
+
+	// Call directly to target handleHead branch with non-empty ID.
+	h.handleHead(w, req, "12345678901234567890")
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestHandleHeadDocIDExistsReturns200(t *testing.T) {
+	origin := getRegistrationDoc
+	getRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
+		return nil
+	}
+	t.Cleanup(func() { getRegistrationDoc = origin })
+
+	h := &Handler{}
+	req := httptest.NewRequest(http.MethodHead, "/envdash/v1/registrations/{id}", nil)
+	w := httptest.NewRecorder()
+
+	h.handleHead(w, req, "12345678901234567890")
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
 func TestAddRegistrationSuccess(t *testing.T) {
