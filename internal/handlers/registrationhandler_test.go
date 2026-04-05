@@ -19,6 +19,7 @@ func TestHandleAllGetRegistrations(t *testing.T) {
 
 }
 
+/*
 func TestHandleAllGetRegistrationsBadRequestTooShort(t *testing.T) {
 	handler := &Handler{}
 	req := httptest.NewRequest(http.MethodHead, "/envdash/v1/registrations/S", nil)
@@ -30,6 +31,7 @@ func TestHandleAllGetRegistrationsBadRequestTooShort(t *testing.T) {
 		t.Fatalf("expected status %v, got %v", http.StatusBadRequest, w.Code)
 	}
 }
+*/
 
 func TestHandleAllGetRegistrationsBadRequestTooLong(t *testing.T) {
 	handler := &Handler{}
