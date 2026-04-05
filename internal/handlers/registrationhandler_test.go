@@ -1362,4 +1362,3 @@ func TestDeleteRegistrationDeleteFailure(t *testing.T) {
 	assert.Equal(t, "mock-id-001", gotDeleteID)
 	assert.True(t, deleteCalled)
 }
->>>>>>> internal/handlers/registrationhandler_test.go
