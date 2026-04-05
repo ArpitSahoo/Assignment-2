@@ -64,6 +64,26 @@ var getRegistrationByIDDocImpl = func(ctx context.Context, client *firestore.Cli
 	return doc.Data(), nil
 }
 
+// listRegistrationDocs retrieves all registration documents from Firestore and returns them as a slice of maps.
+// Defined as variable to allow for replacement in tests.
+var listRegistrationDocs = func(ctx context.Context, client *firestore.Client) ([]map[string]interface{}, error) {
+	iter := client.Collection(utility.RegistrationsCollection).Documents(ctx) // Creates an Iterator
+	defer iter.Stop()                                                         // Ensures it stops in at the end
+
+	var results []map[string]interface{}
+	for { // Document looping
+		doc, err := iter.Next()
+		if errors.Is(err, iterator.Done) { // stop when no more documents
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, doc.Data()) // add document data in list
+	}
+	return results, nil
+}
+
 // HandleRegReq routes incoming HTTP requests to the appropriate handler method
 // based on the request method. Supports POST for adding registrations and GET
 // for retrieving registrations. Responds with 405 Method Not Allowed for unsupported methods.
@@ -162,26 +182,6 @@ func (h *Handler) handleAllGetRegistration(w http.ResponseWriter, r *http.Reques
 	h.GetRegistrationByID(w, r, docID)
 }
 
-// listRegistrationDocs retrieves all registration documents from Firestore and returns them as a slice of maps.
-// Defined as variable to allow for replacement in tests.
-var listRegistrationDocs = func(ctx context.Context, client *firestore.Client) ([]map[string]interface{}, error) {
-	iter := client.Collection(utility.RegistrationsCollection).Documents(ctx) // Creates an Iterator
-	defer iter.Stop()                                                         // Ensures it stops in at the end
-
-	var results []map[string]interface{}
-	for { // Document looping
-		doc, err := iter.Next()
-		if errors.Is(err, iterator.Done) { // stop when no more documents
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-		results = append(results, doc.Data()) // add document data in list
-	}
-	return results, nil
-}
-
 // GetAllRegistrations retrieves all registration documents from Firestore and returns them as a
 // JSON array in the response body. It iterates through all documents in the "registrations" collection, 4
 // collects their data into a slice of maps, and encodes the result as JSON.
@@ -217,7 +217,7 @@ func (h *Handler) handleHead(w http.ResponseWriter, r *http.Request, docID strin
 
 	// Checks if the document with the provided docID exists in Firestore.
 	//If it does not exist, it will return a status code of 404.
-	_, err := h.Client.Collection(utility.RegistrationsCollection).Doc(docID).Get(ctx)
+	err := getRegistrationDoc(ctx, h.Client, docID)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		log.Printf("Document %s does not exist", docID)
