@@ -91,10 +91,11 @@ func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 
 }
 
-// handleAllGetRegistration handles GET requests to the /registrations endpoint. If an ISO code size
-// is less than 0, the method will fetch all the countries by calling another method.
-// Otherwise, the ISO code is smaller not 2 it will return.
-// If the ISO code is valid, it will fetch the country with the provided ISO code by calling another method.
+// handleAllGetRegistration handles all the GET requests to the /registrations endpoint.
+// It checks if the request is a HEAD or GET request, and if an ID is provided in the path.
+// If it's a HEAD request, it calls the handleHead method to return only headers.
+// If it's a GET request without an ID, it retrieves all registrations. If an ID is provided,
+// it validates the ID and retrieves the specific registration by ID.
 func (h *Handler) handleAllGetRegistration(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received %s request", r.Method)
 	docID := strings.TrimSpace(r.PathValue("id"))
@@ -107,7 +108,7 @@ func (h *Handler) handleAllGetRegistration(w http.ResponseWriter, r *http.Reques
 	}
 
 	// GET logic
-	if len(docID) == 0 {
+	if docID == "" {
 		h.GetAllRegistrations(w, r)
 		return
 	}
@@ -157,22 +158,12 @@ func (h *Handler) handleHead(r *http.Request, w http.ResponseWriter, docID strin
 	docID = strings.TrimSpace(docID)
 
 	// Checks if the docID is empty, if empty it will return a status code of 200.
-	if len(docID) == 0 {
+	if strings.TrimSpace(docID) == "" {
 		w.WriteHeader(http.StatusOK)
-		log.Printf("Received %s request", r.Method)
 		return
 	}
 
-	// If the docID is the valid length of 20 characters, if not valid it returns status code 400
-	/*
-		if len(docID) != 20 {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		NOT NEEDED ?
-	*/
-
-	ctx := r.Context()
+	ctx := firestoreContext(r)
 
 	// Checks if the document with the provided docID exists in Firestore.
 	//If it does not exist, it will return a status code of 404.
@@ -196,7 +187,6 @@ func (h *Handler) GetRegistrationByID(w http.ResponseWriter, r *http.Request, do
 	// Query Firestore for documents where the "docID" field matches the provided id
 	docResults, err := h.Client.Collection(utility.RegistrationsCollection).Doc(docID).Get(ctx)
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
 		http.Error(w, "Registration not found", http.StatusNotFound)
 		log.Printf("Registration with ID %s not found: %v", docID, err)
 		return
