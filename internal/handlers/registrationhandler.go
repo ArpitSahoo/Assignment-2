@@ -103,7 +103,7 @@ func (h *Handler) handleAllGetRegistration(w http.ResponseWriter, r *http.Reques
 
 	// HEAD → return headers only
 	if r.Method == http.MethodHead {
-		h.handleHead(r, w, docID)
+		h.handleHead(w, r, docID)
 		return
 	}
 
@@ -154,7 +154,7 @@ func (h *Handler) GetAllRegistrations(w http.ResponseWriter, r *http.Request) {
 // as required by the HTTP HEAD method.
 // This method mirrors the validation and lookup logic of the GET handler,
 // but intentionally omits writing any response body, as required by the HTTP HEAD method.
-func (h *Handler) handleHead(r *http.Request, w http.ResponseWriter, docID string) {
+func (h *Handler) handleHead(w http.ResponseWriter, r *http.Request, docID string) {
 	docID = strings.TrimSpace(docID)
 
 	// Checks if the docID is empty, if empty it will return a status code of 200.
