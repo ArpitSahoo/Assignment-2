@@ -54,6 +54,36 @@ var deleteRegistrationDoc = func(ctx context.Context, client *firestore.Client, 
 	return err
 }
 
+// getRegistrationByIDDocImpl retrieves a registration document by its ID, returns the document data as a map.
+// Defined as variable to allow for replacement in tests.
+var getRegistrationByIDDocImpl = func(ctx context.Context, client *firestore.Client, id string) (map[string]any, error) {
+	doc, err := client.Collection(utility.RegistrationsCollection).Doc(id).Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return doc.Data(), nil
+}
+
+// listRegistrationDocs retrieves all registration documents from Firestore and returns them as a slice of maps.
+// Defined as variable to allow for replacement in tests.
+var listRegistrationDocs = func(ctx context.Context, client *firestore.Client) ([]map[string]interface{}, error) {
+	iter := client.Collection(utility.RegistrationsCollection).Documents(ctx) // Creates an Iterator
+	defer iter.Stop()                                                         // Ensures it stops in at the end
+
+	var results []map[string]interface{}
+	for { // Document looping
+		doc, err := iter.Next()
+		if errors.Is(err, iterator.Done) { // stop when no more documents
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, doc.Data()) // add document data in list
+	}
+	return results, nil
+}
+
 // HandleRegReq routes incoming HTTP requests to the appropriate handler method
 // based on the request method. Supports POST for adding registrations and GET
 // for retrieving registrations. Responds with 405 Method Not Allowed for unsupported methods.
@@ -153,28 +183,19 @@ func (h *Handler) handleAllGetRegistration(w http.ResponseWriter, r *http.Reques
 }
 
 // GetAllRegistrations retrieves all registration documents from Firestore and returns them as a
-// JSON array in the response body. It iterates through all documents in the "registrations" collection, 4
+// JSON array in the response body. It iterates through all documents in the "registrations" collection,
 // collects their data into a slice of maps, and encodes the result as JSON.
 // If an error occurs during retrieval, it responds with a 500 Internal Server Error.
 func (h *Handler) GetAllRegistrations(w http.ResponseWriter, r *http.Request) {
 	ctx := firestoreContext(r)
-	iter := h.Client.Collection(utility.RegistrationsCollection).Documents(ctx)
-	defer iter.Stop()
 
-	// Iterate through all documents and collect their data into a slice of maps
-	var results []map[string]interface{}
-
-	for {
-		doc, err := iter.Next()
-		if errors.Is(err, iterator.Done) {
-			break
-		}
-		if err != nil {
-			http.Error(w, "Error retrieving data", http.StatusInternalServerError)
-			return
-		}
-		results = append(results, doc.Data())
+	results, err := listRegistrationDocs(ctx, h.Client)
+	if err != nil {
+		http.Error(w, "Error retrieving data", http.StatusInternalServerError)
+		log.Printf("Failed to list registration documents: %v", err)
+		return
 	}
+
 	_ = json.NewEncoder(w).Encode(results)
 }
 
@@ -197,7 +218,7 @@ func (h *Handler) handleHead(w http.ResponseWriter, r *http.Request, docID strin
 
 	// Checks if the document with the provided docID exists in Firestore.
 	//If it does not exist, it will return a status code of 404.
-	_, err := h.Client.Collection(utility.RegistrationsCollection).Doc(docID).Get(ctx)
+	err := getRegistrationDoc(ctx, h.Client, docID)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		log.Printf("Document %s does not exist", docID)
@@ -214,16 +235,14 @@ func (h *Handler) handleHead(w http.ResponseWriter, r *http.Request, docID strin
 func (h *Handler) GetRegistrationByID(w http.ResponseWriter, r *http.Request, docID string) {
 	ctx := firestoreContext(r)
 
-	// Query Firestore for documents where the "docID" field matches the provided id
-	docResults, err := h.Client.Collection(utility.RegistrationsCollection).Doc(docID).Get(ctx)
+	data, err := getRegistrationByIDDocImpl(ctx, h.Client, docID)
 	if err != nil {
 		http.Error(w, "Registration not found", http.StatusNotFound)
 		log.Printf("Registration with ID %s not found: %v", docID, err)
 		return
 	}
 
-	// Encode the matching documents as JSON in the response body
-	_ = json.NewEncoder(w).Encode(docResults.Data())
+	_ = json.NewEncoder(w).Encode(data)
 }
 
 // replaceRegistration handles PUT requests to the /registrations/{id} endpoint.

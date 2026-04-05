@@ -28,31 +28,340 @@ func TestHandleAllGetRegistrations(t *testing.T) {
 
 }
 
-/*
-func TestHandleAllGetRegistrationsBadRequestTooShort(t *testing.T) {
-	handler := &Handler{}
-	req := httptest.NewRequest(http.MethodHead, "/envdash/v1/registrations/S", nil)
-	req.SetPathValue("id", "S")
+func TestHandleAllGetRegistrationInvalidDocIDLength(t *testing.T) {
+	h := &Handler{}
+
+	req := httptest.NewRequest(http.MethodGet, "/envdash/v1/registrations/{id}", nil)
+	req.SetPathValue("id", "short-id") // len != 20
 	w := httptest.NewRecorder()
 
-	handler.handleAllGetRegistration(w, req)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected status %v, got %v", http.StatusBadRequest, w.Code)
-	}
+	h.handleAllGetRegistration(w, req)
+
+	resp := w.Result()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Equal(t, "text/plain; charset=utf-8", resp.Header.Get("Content-Type"))
 }
 
+func TestHandleAllGetRegistrationGetNoIDCallsGetAll(t *testing.T) {
+	origin := listRegistrationDocs
+	listRegistrationDocs = func(ctx context.Context, client *firestore.Client) ([]map[string]interface{}, error) {
+		return []map[string]interface{}{
+			{"country": "Norway", "isoCode": "NO"},
+		}, nil
+	}
+	t.Cleanup(func() { listRegistrationDocs = origin })
 
-func TestHandleAllGetRegistrationsBadRequestTooLong(t *testing.T) {
-	handler := &Handler{}
-	req := httptest.NewRequest(http.MethodHead, "/envdash/v1/registrations/SEE", nil)
-	req.SetPathValue("id", "SEE")
+	h := &Handler{}
+	req := httptest.NewRequest(http.MethodGet, "/envdash/v1/registrations", nil)
 	w := httptest.NewRecorder()
-	handler.handleAllGetRegistration(w, req)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected status %v, got %v", http.StatusBadRequest, w.Code)
-	}
+
+	h.handleAllGetRegistration(w, req)
+
+	resp := w.Result()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(t)
+		}
+	}(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+
+	var got []map[string]interface{}
+	err := json.NewDecoder(resp.Body).Decode(&got)
+	assert.NoError(t, err)
+	assert.Len(t, got, 1)
+	assert.Equal(t, "Norway", got[0]["country"])
 }
-*/
+
+func TestHandleRegReqGetInvalidDocIDLength(t *testing.T) {
+	h := &Handler{}
+
+	req := httptest.NewRequest(http.MethodGet, "/envdash/v1/registrations/{id}", nil)
+	req.SetPathValue("id", "123") // len != 20
+	w := httptest.NewRecorder()
+
+	h.HandleRegReq(w, req)
+
+	resp := w.Result()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
+
+func TestHandleAllGetRegistrationHeadNoIDReturnsStatusOK(t *testing.T) {
+	h := &Handler{}
+
+	req := httptest.NewRequest(http.MethodHead, "/envdash/v1/registrations", nil)
+	w := httptest.NewRecorder()
+
+	h.handleAllGetRegistration(w, req)
+
+	resp := w.Result()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+}
+
+func TestHandleAllGetRegistrationHeadWhitespaceIDStatusOK(t *testing.T) {
+	h := &Handler{}
+
+	req := httptest.NewRequest(http.MethodHead, "/envdash/v1/registrations/{id}", nil)
+	req.SetPathValue("id", "   ") // trimmed => empty
+	w := httptest.NewRecorder()
+
+	h.handleAllGetRegistration(w, req)
+
+	resp := w.Result()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+}
+
+func TestGetAllRegistrationsSuccess(t *testing.T) {
+	origin := listRegistrationDocs
+	listRegistrationDocs = func(ctx context.Context, client *firestore.Client) ([]map[string]interface{}, error) {
+		return []map[string]interface{}{
+			{"country": "Norway", "isoCode": "NO"},
+			{"country": "Sweden", "isoCode": "SE"},
+		}, nil
+	}
+	t.Cleanup(func() { listRegistrationDocs = origin })
+
+	h := &Handler{}
+	req := httptest.NewRequest(http.MethodGet, "/envdash/v1/registrations", nil)
+	w := httptest.NewRecorder()
+
+	h.GetAllRegistrations(w, req)
+
+	resp := w.Result()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal()
+		}
+	}(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var got []map[string]interface{}
+	err := json.NewDecoder(resp.Body).Decode(&got)
+	assert.NoError(t, err)
+	assert.Len(t, got, 2)
+	assert.Equal(t, "Norway", got[0]["country"])
+	assert.Equal(t, "SE", got[1]["isoCode"])
+}
+
+func TestGetAllRegistrationsError(t *testing.T) {
+	origin := listRegistrationDocs
+	listRegistrationDocs = func(ctx context.Context, client *firestore.Client) ([]map[string]interface{}, error) {
+		return nil, errors.New("firestore down")
+	}
+	t.Cleanup(func() { listRegistrationDocs = origin })
+
+	h := &Handler{}
+	req := httptest.NewRequest(http.MethodGet, "/envdash/v1/registrations", nil)
+	w := httptest.NewRecorder()
+
+	h.GetAllRegistrations(w, req)
+
+	resp := w.Result()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
+
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+}
+
+func TestGetAllFromEmptyRegistrationsReturnsOK(t *testing.T) {
+	origin := listRegistrationDocs
+	listRegistrationDocs = func(ctx context.Context, client *firestore.Client) ([]map[string]interface{}, error) {
+		return []map[string]interface{}{}, nil
+	}
+	t.Cleanup(func() { listRegistrationDocs = origin })
+
+	h := &Handler{}
+	req := httptest.NewRequest(http.MethodGet, "/envdash/v1/registrations", nil)
+	w := httptest.NewRecorder()
+
+	h.GetAllRegistrations(w, req)
+
+	resp := w.Result()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal()
+		}
+	}(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var got []map[string]interface{}
+	err := json.NewDecoder(resp.Body).Decode(&got)
+	assert.NoError(t, err)
+	assert.Len(t, got, 0)
+}
+
+func TestGetRegistrationByIDSuccess(t *testing.T) {
+	origin := getRegistrationByIDDocImpl
+	getRegistrationByIDDocImpl = func(ctx context.Context, client *firestore.Client, id string) (map[string]any, error) {
+		return map[string]any{
+			"country": "Norway",
+			"isoCode": "NO",
+		}, nil
+	}
+	t.Cleanup(func() { getRegistrationByIDDocImpl = origin })
+
+	h := &Handler{}
+	req := httptest.NewRequest(http.MethodGet, "/envdash/v1/registrations/mockid1234567890123", nil)
+	w := httptest.NewRecorder()
+
+	h.GetRegistrationByID(w, req, "mockid1234567890123")
+
+	resp := w.Result()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var got map[string]any
+	err := json.NewDecoder(resp.Body).Decode(&got)
+	assert.NoError(t, err)
+	assert.Equal(t, "Norway", got["country"])
+	assert.Equal(t, "NO", got["isoCode"])
+}
+
+func TestGetRegistrationByIDWhenNotFoundReturns404(t *testing.T) {
+	origin := getRegistrationByIDDocImpl
+	getRegistrationByIDDocImpl = func(ctx context.Context, client *firestore.Client, id string) (map[string]any, error) {
+		return nil, errors.New("not found")
+	}
+	t.Cleanup(func() { getRegistrationByIDDocImpl = origin })
+
+	h := &Handler{}
+	req := httptest.NewRequest(http.MethodGet, "/envdash/v1/registrations/missingid1234567890", nil)
+	w := httptest.NewRecorder()
+
+	h.GetRegistrationByID(w, req, "missingid1234567890")
+
+	resp := w.Result()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestGetRegistrationByID_FirestoreError_Returns404(t *testing.T) {
+	//This test checks the current behavior of GetRegistrationByID when Firestore returns any error.
+	origin := getRegistrationByIDDocImpl //Save original function
+	getRegistrationByIDDocImpl = func(ctx context.Context, client *firestore.Client, id string) (map[string]any, error) {
+		return nil, errors.New("temporary firestore outage") //Mock
+	}
+	t.Cleanup(func() { getRegistrationByIDDocImpl = origin }) // Restoration
+
+	h := &Handler{}
+	req := httptest.NewRequest(http.MethodGet, "/envdash/v1/registrations/anyid1234567890123", nil)
+	w := httptest.NewRecorder()
+
+	//Call handler
+	h.GetRegistrationByID(w, req, "anyid1234567890123")
+
+	resp := w.Result()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
+
+	// Matches current production behavior: any error maps to 404.
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestHandleHeadDocIDNotFoundReturns404(t *testing.T) {
+	origin := getRegistrationDoc
+	getRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
+		return errors.New("not found")
+	}
+	t.Cleanup(func() { getRegistrationDoc = origin })
+
+	h := &Handler{}
+	req := httptest.NewRequest(http.MethodHead, "/envdash/v1/registrations/{id}", nil)
+	w := httptest.NewRecorder()
+
+	// Call directly to target handleHead branch with non-empty ID.
+	h.handleHead(w, req, "12345678901234567890")
+
+	resp := w.Result()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(t)
+		}
+	}(resp.Body)
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestHandleHeadDocIDExistsReturns200(t *testing.T) {
+	origin := getRegistrationDoc
+	getRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
+		return nil
+	}
+	t.Cleanup(func() { getRegistrationDoc = origin })
+
+	h := &Handler{}
+	req := httptest.NewRequest(http.MethodHead, "/envdash/v1/registrations/{id}", nil)
+	w := httptest.NewRecorder()
+
+	h.handleHead(w, req, "12345678901234567890")
+
+	resp := w.Result()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal()
+		}
+	}(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
 
 func TestAddRegistrationSuccess(t *testing.T) {
 	origin := addRegistrationDocImpl
