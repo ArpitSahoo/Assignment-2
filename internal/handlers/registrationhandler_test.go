@@ -65,7 +65,12 @@ func TestHandleAllGetRegistrationGetNoIDCallsGetAll(t *testing.T) {
 	h.handleAllGetRegistration(w, req)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(t)
+		}
+	}(resp.Body)
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
@@ -324,7 +329,12 @@ func TestHandleHeadDocIDNotFoundReturns404(t *testing.T) {
 	h.handleHead(w, req, "12345678901234567890")
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(t)
+		}
+	}(resp.Body)
 
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
@@ -343,7 +353,12 @@ func TestHandleHeadDocIDExistsReturns200(t *testing.T) {
 	h.handleHead(w, req, "12345678901234567890")
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal()
+		}
+	}(resp.Body)
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
