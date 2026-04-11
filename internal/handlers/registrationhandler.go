@@ -123,7 +123,7 @@ func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 	// Increase the local registration count by one
 	h.RegistrationCount.Add(1)
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(utility.ContentType, utility.ApplicationJSON)
 	w.WriteHeader(http.StatusCreated)
 
 	// Encode the response body as JSON
@@ -138,7 +138,7 @@ func (h *Handler) handleAllGetRegistration(w http.ResponseWriter, r *http.Reques
 	log.Printf("Received %s request", r.Method)
 
 	isoCode := strings.ToUpper(strings.TrimSpace(r.PathValue("id")))
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(utility.ContentType, utility.ApplicationJSON)
 
 	// HEAD → return headers only
 	if r.Method == http.MethodHead {
