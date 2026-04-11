@@ -266,7 +266,7 @@ func (h *Handler) replaceRegistration(w http.ResponseWriter, r *http.Request) {
 
 	id := strings.TrimSpace(r.PathValue("id"))
 	if id == "" {
-		log.Printf("Missing id parameter")
+		log.Printf("invalid registration id: %q", id)
 		http.Error(w, "invalid registration id", http.StatusBadRequest)
 		return
 	}
@@ -314,7 +314,7 @@ func (h *Handler) patchRegistration(w http.ResponseWriter, r *http.Request) {
 
 	id := strings.TrimSpace(r.PathValue("id"))
 	if id == "" {
-		log.Printf("invalid registration id %s", id)
+		log.Printf("invalid registration id: %q", id)
 		http.Error(w, "invalid registration id", http.StatusBadRequest)
 		return
 	}
@@ -357,7 +357,7 @@ func (h *Handler) deleteRegistration(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received %s request", r.Method)
 	id := strings.TrimSpace(r.PathValue("id"))
 	if id == "" {
-		log.Printf("Missing id parameter")
+		log.Printf("invalid registration id: %q", id)
 		http.Error(w, "invalid registration id", http.StatusBadRequest)
 		return
 	}
@@ -422,14 +422,14 @@ func firestoreContext(r *http.Request) context.Context {
 // response if validation fails.
 func validateRegReq(w http.ResponseWriter, regReq utility.RegistrationRequest) bool {
 	if len(regReq.IsoCode) != utility.IsoCodeLength {
-		log.Printf("Invalid isoCode: %s", regReq.IsoCode)
+		log.Printf("Invalid isoCode: %q", regReq.IsoCode)
 		http.Error(w, "iso-code must be 2-letter country code", http.StatusBadRequest)
 		return true
 	}
 
 	for _, l := range regReq.IsoCode {
 		if !unicode.IsLetter(l) {
-			log.Printf("Invalid isoCode: %v", l)
+			log.Printf("Invalid isoCode: %q", l)
 			http.Error(w, "iso-code must contain only letters", http.StatusBadRequest)
 			return true
 		}
@@ -444,7 +444,7 @@ func validateRegReq(w http.ResponseWriter, regReq utility.RegistrationRequest) b
 	for _, c := range regReq.Country {
 		// Unicode.IsSpace takes into account country names with spaces in the name
 		if !unicode.IsLetter(c) && !unicode.IsSpace(c) {
-			log.Printf("Invalid country: %v", c)
+			log.Printf("Invalid country: %q", c)
 			http.Error(w, "country must contain only letters", http.StatusBadRequest)
 			return true
 		}
@@ -452,13 +452,13 @@ func validateRegReq(w http.ResponseWriter, regReq utility.RegistrationRequest) b
 
 	for _, f := range regReq.Features.TargetCurrencies {
 		if len(f) != utility.CurrencyCodeLength {
-			log.Printf("Invalid currency length: %v", f)
+			log.Printf("Invalid currency length: %q", f)
 			http.Error(w, "target currency must be 3-letter ISO-code", http.StatusBadRequest)
 			return true
 		}
 		for _, l := range f {
 			if !unicode.IsLetter(l) {
-				log.Printf("Invalid currency code: %v", l)
+				log.Printf("Invalid currency code: %q contains invalid character %q", f, l)
 				http.Error(w, "target currency must contain only letters", http.StatusBadRequest)
 				return true
 			}
@@ -534,13 +534,13 @@ func normalizePatchFields(regReq *utility.RegistrationPatchRequest) {
 func validatePatchRegReq(w http.ResponseWriter, regReq utility.RegistrationPatchRequest) bool {
 	if regReq.IsoCode != nil {
 		if len(*regReq.IsoCode) != utility.IsoCodeLength {
-			log.Printf("Invalid isoCode: %v", regReq.IsoCode)
+			log.Printf("Invalid isoCode: %q", regReq.IsoCode)
 			http.Error(w, "iso-code must be 2-letter country code", http.StatusBadRequest)
 			return true
 		}
 		for _, l := range *regReq.IsoCode {
 			if !unicode.IsLetter(l) {
-				log.Printf("Invalid isoCode: %v", l)
+				log.Printf("Invalid isoCode: %q", l)
 				http.Error(w, "iso-code must contain only letters", http.StatusBadRequest)
 				return true
 			}
@@ -549,14 +549,14 @@ func validatePatchRegReq(w http.ResponseWriter, regReq utility.RegistrationPatch
 
 	if regReq.Country != nil {
 		if *regReq.Country == "" {
-			log.Printf("Missing country")
-			http.Error(w, "missing country", http.StatusBadRequest)
+			log.Printf("invalid country: %q", *regReq.Country)
+			http.Error(w, "country cannot be blank", http.StatusBadRequest)
 			return true
 		}
 		for _, c := range *regReq.Country {
 			// Unicode.IsSpace takes into account country names with spaces in the name
 			if !unicode.IsLetter(c) && !unicode.IsSpace(c) {
-				log.Printf("Invalid country: %v", c)
+				log.Printf("Invalid country: %q", c)
 				http.Error(w, "country must contain only letters", http.StatusBadRequest)
 				return true
 			}
@@ -568,13 +568,13 @@ func validatePatchRegReq(w http.ResponseWriter, regReq utility.RegistrationPatch
 		f := regReq.Features
 
 		if f.TargetCurrencies != nil && (f.AddTargetCurrencies != nil || f.RemoveTargetCurrencies != nil) {
-			log.Printf("Invalid target currencies: %v", f.TargetCurrencies)
+			log.Printf("Invalid target currencies: %q", f.TargetCurrencies)
 			http.Error(w, "target currencies cannot be replaced and added/removed in the same request", http.StatusBadRequest)
 			return true
 		}
 
 		if f.AddTargetCurrencies != nil && f.RemoveTargetCurrencies != nil {
-			log.Printf("Invalid target currencies: %v", f.RemoveTargetCurrencies)
+			log.Printf("Invalid target currencies: %q", f.RemoveTargetCurrencies)
 			http.Error(w, "target currencies cannot be added and removed in the same request", http.StatusBadRequest)
 			return true
 		}
@@ -632,13 +632,13 @@ func validateCurrencyList(w http.ResponseWriter, currencies *[]string, fieldName
 
 	for _, curr := range *currencies {
 		if len(curr) != utility.CurrencyCodeLength {
-			log.Printf("Invalid currency length: %v", curr)
+			log.Printf("Invalid currency length: %q", curr)
 			http.Error(w, fieldName+" must be 3-letter ISO-code", http.StatusBadRequest)
 			return true
 		}
 		for _, l := range curr {
 			if !unicode.IsLetter(l) {
-				log.Printf("Invalid currency code: %v", l)
+				log.Printf("Invalid currency code: %q contains invalid character %q", curr, l)
 				http.Error(w, fieldName+" must contain only letters", http.StatusBadRequest)
 				return true
 			}
