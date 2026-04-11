@@ -9,7 +9,7 @@ type RegistrationRequest struct {
 }
 
 // RegistrationFeatures specifies which dashboard fields to be included
-// in the dashboard configuration stored through the /registration endpoint.
+// in the dashboard configuration stored through the /registrations endpoint.
 type RegistrationFeatures struct {
 	Temperature      bool     `json:"temperature"`
 	Precipitation    bool     `json:"precipitation"`
@@ -21,9 +21,34 @@ type RegistrationFeatures struct {
 	TargetCurrencies []string `json:"targetCurrencies"`
 }
 
-// RegistrationResponse is a JSON response returned by the /registration endpoint
-// after a registration has been created or updated.
+// RegistrationResponse is a JSON response returned by the /registrations
+// endpoint after a registration is created.
 type RegistrationResponse struct {
 	ID         string `json:"id"`
 	LastChange string `json:"lastChange"`
+}
+
+// RegistrationPatchRequest is a JSON payload used to partially update
+// a stored dashboard configuration through the /registrations/{id} endpoint.
+type RegistrationPatchRequest struct {
+	Country  *string                    `json:"country,omitempty"`
+	IsoCode  *string                    `json:"isoCode,omitempty"`
+	Features *RegistrationPatchFeatures `json:"features,omitempty"`
+}
+
+// RegistrationPatchFeatures represents feature fields which may be
+// partially updated in a PATCH request. Supports replacement of
+// the entire targetCurrencies list, and addition/removal of currencies.
+type RegistrationPatchFeatures struct {
+	Temperature      *bool     `json:"temperature,omitempty"`
+	Precipitation    *bool     `json:"precipitation,omitempty"`
+	AirQuality       *bool     `json:"airQuality,omitempty"`
+	Capital          *bool     `json:"capital,omitempty"`
+	Coordinates      *bool     `json:"coordinates,omitempty"`
+	Population       *bool     `json:"population,omitempty"`
+	Area             *bool     `json:"area,omitempty"`
+	TargetCurrencies *[]string `json:"targetCurrencies,omitempty"`
+
+	AddTargetCurrencies    *[]string `json:"addTargetCurrencies,omitempty"`
+	RemoveTargetCurrencies *[]string `json:"removeTargetCurrencies,omitempty"`
 }
