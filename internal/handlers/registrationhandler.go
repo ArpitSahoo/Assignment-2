@@ -436,8 +436,8 @@ func validateRegReq(w http.ResponseWriter, regReq utility.RegistrationRequest) b
 	}
 
 	if regReq.Country == "" {
-		log.Printf("Missing country")
-		http.Error(w, "missing country", http.StatusBadRequest)
+		log.Printf("invalid country: %q", regReq.Country)
+		http.Error(w, "country cannot be blank", http.StatusBadRequest)
 		return true
 	}
 
@@ -534,7 +534,7 @@ func normalizePatchFields(regReq *utility.RegistrationPatchRequest) {
 func validatePatchRegReq(w http.ResponseWriter, regReq utility.RegistrationPatchRequest) bool {
 	if regReq.IsoCode != nil {
 		if len(*regReq.IsoCode) != utility.IsoCodeLength {
-			log.Printf("Invalid isoCode: %q", regReq.IsoCode)
+			log.Printf("Invalid isoCode: %q", *regReq.IsoCode)
 			http.Error(w, "iso-code must be 2-letter country code", http.StatusBadRequest)
 			return true
 		}
