@@ -106,6 +106,62 @@ func TestAddRegistrationSuccess(t *testing.T) {
 	assert.Equal(t, "mock-id-001", got.ID)
 }
 
+func TestAddRegistrationSpaceSuccess(t *testing.T) {
+	origin := addRegistrationDocImpl
+	addRegistrationDocImpl = func(ctx context.Context, client *firestore.Client, reg map[string]any) (string, error) {
+		return "mock-id-001", nil
+	}
+
+	defer func() {
+		addRegistrationDocImpl = origin
+	}()
+
+	h := &Handler{}
+
+	// Ensure it can handle country names with space in them
+	body := `{
+   		"country": "New Zealand",
+   		"isoCode": "NZ",
+   		"features": {
+      		"temperature": true,
+      		"precipitation": true,
+      		"airQuality": true,
+      		"capital": true,
+      		"coordinates": true,
+      		"population": true,
+      		"area": true,
+      		"targetCurrencies": ["EUR", "USD", "SEK"]
+		}
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/envdash/v1/registrations", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	before := h.RegistrationCount.Load()
+
+	h.addRegistration(w, req)
+
+	after := h.RegistrationCount.Load()
+
+	resp := w.Result()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
+
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	assert.Equal(t, before+1, after)
+
+	var got utility.RegistrationResponse
+	err := json.NewDecoder(resp.Body).Decode(&got)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "mock-id-001", got.ID)
+}
+
 func TestAddRegistrationFalseFieldsSuccess(t *testing.T) {
 	origin := addRegistrationDocImpl
 	addRegistrationDocImpl = func(ctx context.Context, client *firestore.Client, reg map[string]any) (string, error) {
@@ -598,6 +654,158 @@ func TestAddRegistrationInvalidCountry3(t *testing.T) {
       		"population": true,
       		"area": true,
       		"targetCurrencies": ["EUR", "USD", "SEK"]
+		}
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, "/envdash/v1/registrations", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	before := h.RegistrationCount.Load()
+
+	h.addRegistration(w, req)
+
+	after := h.RegistrationCount.Load()
+	resp := w.Result()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Equal(t, before, after)
+}
+
+func TestAddRegistrationInvalidCurrency1(t *testing.T) {
+	h := &Handler{}
+	// Change EUR to EU
+	body := `{
+   		"country": "Norway",
+   		"isoCode": "NO",
+   		"features": {
+      		"temperature": true,
+      		"precipitation": true,
+      		"airQuality": true,
+      		"capital": true,
+      		"coordinates": true,
+      		"population": true,
+      		"area": true,
+      		"targetCurrencies": ["EU", "USD", "SEK"]
+		}
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, "/envdash/v1/registrations", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	before := h.RegistrationCount.Load()
+
+	h.addRegistration(w, req)
+
+	after := h.RegistrationCount.Load()
+	resp := w.Result()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Equal(t, before, after)
+}
+
+func TestAddRegistrationInvalidCurrency2(t *testing.T) {
+	h := &Handler{}
+	// Have one currency, but EU instead of EUR
+	body := `{
+   		"country": "Norway",
+   		"isoCode": "NO",
+   		"features": {
+      		"temperature": true,
+      		"precipitation": true,
+      		"airQuality": true,
+      		"capital": true,
+      		"coordinates": true,
+      		"population": true,
+      		"area": true,
+      		"targetCurrencies": ["EU"]
+		}
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, "/envdash/v1/registrations", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	before := h.RegistrationCount.Load()
+
+	h.addRegistration(w, req)
+
+	after := h.RegistrationCount.Load()
+	resp := w.Result()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Equal(t, before, after)
+}
+
+func TestAddRegistrationInvalidCurrency3(t *testing.T) {
+	h := &Handler{}
+	// Use symbols as currency
+	body := `{
+   		"country": "Norway",
+   		"isoCode": "NO",
+   		"features": {
+      		"temperature": true,
+      		"precipitation": true,
+      		"airQuality": true,
+      		"capital": true,
+      		"coordinates": true,
+      		"population": true,
+      		"area": true,
+      		"targetCurrencies": ["!!!"]
+		}
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, "/envdash/v1/registrations", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	before := h.RegistrationCount.Load()
+
+	h.addRegistration(w, req)
+
+	after := h.RegistrationCount.Load()
+	resp := w.Result()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Equal(t, before, after)
+}
+
+func TestAddRegistrationInvalidCurrency4(t *testing.T) {
+	h := &Handler{}
+	// Invalid currency length
+	body := `{
+   		"country": "Norway",
+   		"isoCode": "NO",
+   		"features": {
+      		"temperature": true,
+      		"precipitation": true,
+      		"airQuality": true,
+      		"capital": true,
+      		"coordinates": true,
+      		"population": true,
+      		"area": true,
+      		"targetCurrencies": ["EURO"]
 		}
 	}`
 
