@@ -348,9 +348,10 @@ func (h *Handler) patchRegistration(w http.ResponseWriter, r *http.Request) {
 
 // deleteRegistration handles DELETE requests to the /registrations/{id} endpoint.
 // Validates the registration ID, ensures the registration exists, then deletes it
-// from FireStore.
+// from Firestore.
 func (h *Handler) deleteRegistration(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received %s request", r.Method)
+
 	id := strings.TrimSpace(r.PathValue("id"))
 	if id == "" {
 		log.Printf("invalid registration id: %q", id)
@@ -360,23 +361,28 @@ func (h *Handler) deleteRegistration(w http.ResponseWriter, r *http.Request) {
 
 	ctx := firestoreContext(r)
 
-	// Retrieve the registration connected to the ID
-	errGet := getRegistrationDoc(ctx, h.Client, id)
+	// Retrieve registration data to make available for webhook notification
+	data, errGet := getRegistrationByIDDocImpl(ctx, h.Client, id)
 	if errGet != nil {
 		log.Printf("Failed to get registration: %v", errGet)
-		http.Error(w, "registration not found", http.StatusNotFound)
+		http.Error(w, "failed getting registration", http.StatusNotFound)
 		return
 	}
 
-	// Delete the registration connected to the ID
+	isoCode, ok := data["isoCode"].(string)
+	if !ok {
+		log.Printf("invalid isoCode for registration %q: %#v", id, data["isoCode"])
+		http.Error(w, "failed reading registration", http.StatusInternalServerError)
+		return
+	}
+
 	errDel := deleteRegistrationDoc(ctx, h.Client, id)
 	if errDel != nil {
 		log.Printf("Failed to delete registration: %v", errDel)
 		http.Error(w, "failed deleting registration", http.StatusInternalServerError)
 		return
 	}
-	log.Printf("Deleted registration with ID: %s", id)
-	// Respond with status code 204
+	log.Printf("Deleted registration with ID: %s and isoCode: %s", id, isoCode)
 	w.WriteHeader(http.StatusNoContent)
 }
 
