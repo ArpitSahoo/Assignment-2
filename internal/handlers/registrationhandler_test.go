@@ -1702,25 +1702,29 @@ func TestReplaceRegistrationInvalidId(t *testing.T) {
 	assert.False(t, setCalled)
 }
 
-func TestDeleteRegistration(t *testing.T) {
-	originGet := getRegistrationDoc
+func TestDeleteRegistrationSuccess(t *testing.T) {
+	originGet := getRegistrationByIDDocImpl
 	originDelete := deleteRegistrationDoc
 
 	var gotID string
+	var gotDeleteID string
 	var deleteCalled bool
 
-	getRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
-		return nil
+	getRegistrationByIDDocImpl = func(ctx context.Context, client *firestore.Client, id string) (map[string]any, error) {
+		gotID = id
+		return map[string]any{
+			"isoCode": "NO",
+		}, nil
 	}
 
 	deleteRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
-		gotID = id
+		gotDeleteID = id
 		deleteCalled = true
 		return nil
 	}
 
 	defer func() {
-		getRegistrationDoc = originGet
+		getRegistrationByIDDocImpl = originGet
 		deleteRegistrationDoc = originDelete
 	}()
 
@@ -1741,20 +1745,21 @@ func TestDeleteRegistration(t *testing.T) {
 	}(resp.Body)
 
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
-	assert.True(t, deleteCalled)
 	assert.Equal(t, "mock-id-001", gotID)
+	assert.Equal(t, "mock-id-001", gotDeleteID)
+	assert.True(t, deleteCalled)
 }
 
 func TestDeleteRegistrationGetFailure(t *testing.T) {
-	originGet := getRegistrationDoc
+	originGet := getRegistrationByIDDocImpl
 	originDelete := deleteRegistrationDoc
 
 	var gotID string
 	var deleteCalled bool
 
-	getRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
+	getRegistrationByIDDocImpl = func(ctx context.Context, client *firestore.Client, id string) (map[string]any, error) {
 		gotID = id
-		return errors.New("could not find registration")
+		return nil, errors.New("could not find registration")
 	}
 
 	deleteRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
@@ -1763,7 +1768,7 @@ func TestDeleteRegistrationGetFailure(t *testing.T) {
 	}
 
 	defer func() {
-		getRegistrationDoc = originGet
+		getRegistrationByIDDocImpl = originGet
 		deleteRegistrationDoc = originDelete
 	}()
 
@@ -1789,26 +1794,28 @@ func TestDeleteRegistrationGetFailure(t *testing.T) {
 }
 
 func TestDeleteRegistrationInvalidId(t *testing.T) {
-	originGet := getRegistrationDoc
+	originGet := getRegistrationByIDDocImpl
 	originDelete := deleteRegistrationDoc
 
 	var gotID string
 	var gotDeleteID string
 	var deleteCalled bool
 
-	getRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
+	getRegistrationByIDDocImpl = func(ctx context.Context, client *firestore.Client, id string) (map[string]any, error) {
 		gotID = id
-		return nil
+		return map[string]any{
+			"isoCode": "NO",
+		}, nil
 	}
 
 	deleteRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
 		gotDeleteID = id
 		deleteCalled = true
-		return errors.New("failed to delete registration")
+		return nil
 	}
 
 	defer func() {
-		getRegistrationDoc = originGet
+		getRegistrationByIDDocImpl = originGet
 		deleteRegistrationDoc = originDelete
 	}()
 
@@ -1835,16 +1842,18 @@ func TestDeleteRegistrationInvalidId(t *testing.T) {
 }
 
 func TestDeleteRegistrationDeleteFailure(t *testing.T) {
-	originGet := getRegistrationDoc
+	originGet := getRegistrationByIDDocImpl
 	originDelete := deleteRegistrationDoc
 
 	var gotID string
 	var gotDeleteID string
 	var deleteCalled bool
 
-	getRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
+	getRegistrationByIDDocImpl = func(ctx context.Context, client *firestore.Client, id string) (map[string]any, error) {
 		gotID = id
-		return nil
+		return map[string]any{
+			"isoCode": "NO",
+		}, nil
 	}
 
 	deleteRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
@@ -1854,7 +1863,7 @@ func TestDeleteRegistrationDeleteFailure(t *testing.T) {
 	}
 
 	defer func() {
-		getRegistrationDoc = originGet
+		getRegistrationByIDDocImpl = originGet
 		deleteRegistrationDoc = originDelete
 	}()
 
@@ -1878,4 +1887,46 @@ func TestDeleteRegistrationDeleteFailure(t *testing.T) {
 	assert.Equal(t, "mock-id-001", gotID)
 	assert.Equal(t, "mock-id-001", gotDeleteID)
 	assert.True(t, deleteCalled)
+}
+
+func TestDeleteRegistrationInvalidIsoCodeType(t *testing.T) {
+	originGet := getRegistrationByIDDocImpl
+	originDelete := deleteRegistrationDoc
+
+	var deleteCalled bool
+
+	getRegistrationByIDDocImpl = func(ctx context.Context, client *firestore.Client, id string) (map[string]any, error) {
+		return map[string]any{
+			"isoCode": 123,
+		}, nil
+	}
+
+	deleteRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
+		deleteCalled = true
+		return nil
+	}
+
+	defer func() {
+		getRegistrationByIDDocImpl = originGet
+		deleteRegistrationDoc = originDelete
+	}()
+
+	h := &Handler{}
+
+	req := httptest.NewRequest(http.MethodDelete, "/envdash/v1/registrations/{id}", nil)
+	req.SetPathValue("id", "mock-id-001")
+	w := httptest.NewRecorder()
+
+	h.deleteRegistration(w, req)
+
+	resp := w.Result()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
+
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	assert.False(t, deleteCalled)
 }
