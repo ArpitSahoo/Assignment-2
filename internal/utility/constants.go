@@ -12,3 +12,14 @@ const NotificationPathBase = "/envdash/v1/notifications/"
 
 const ContentType = "Content-Type"
 const ApplicationJSON = "application/json"
+
+const (
+	TargetCurrency       = "target currency"
+	AddTargetCurrency    = "add target currency"
+	RemoveTargetCurrency = "remove target currency"
+)
+
+const (
+	IsoCodeLength      = 2
+	CurrencyCodeLength = 3
+)
