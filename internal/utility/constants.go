@@ -16,7 +16,6 @@ const OpenMeteoApiUrlBase = "https://api.open-meteo.com/v1/forecast?latitude={la
 const OpenAQURLBase = "https://api.openaq.org/v3/locations?coordinates={lat},{lng}&radius=25000&parameters_id=1,2&iso={isoCode}&limit=100"
 const OSMURLBase = "https://nominatim.openstreetmap.org/search?city={cap}&countrycodes={isoCode}&format=jsonv2&addressdetails=1&limit=1"
 
-const OpenAQSensorUrl = "https://api.openaq.org/v3/sensors/{id}/measurements"
 const OpenAQLatestURL = "https://api.openaq.org/v3/locations/{id}/latest"
 
 const ContentType = "Content-Type"
