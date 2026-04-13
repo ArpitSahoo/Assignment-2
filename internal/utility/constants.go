@@ -12,3 +12,9 @@ const NotificationPathBase = "/envdash/v1/notifications/"
 
 const ContentType = "Content-Type"
 const ApplicationJSON = "application/json"
+
+const APIKeysCollection = "apiKeys"
+const AuthPath = "/auth/"
+const AuthPathKey = "/auth/{key}"
+const StatusPath = "/envdash/v1/status/"
+const APIKeyHeader = "X-API-Key"
