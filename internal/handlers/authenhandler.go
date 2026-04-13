@@ -50,6 +50,7 @@ func (h *Handler) createAPIKey(w http.ResponseWriter, r *http.Request) {
 	var req utility.AuthenticationRequest // struct to decode the incoming JSON request
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil { // decode the JSON request body into the struct
+		// if there is an error during decoding (e.g., invalid JSON), return a 400 Bad Request error
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return // if decoding fails, return a 400 Bad Request error
 	}
@@ -60,12 +61,14 @@ func (h *Handler) createAPIKey(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "name and email are required", http.StatusBadRequest)
 		return
 	}
-	if _, err := mail.ParseAddress(req.Email); err != nil { // validate the email format using the net/mail package; if invalid, return a 400 Bad Request error
+	if _, err := mail.ParseAddress(req.Email); err != nil { // validate the email format using the net/mail package
+		// if invalid, return a 400 Bad Request error
 		http.Error(w, "invalid email. Please use a valid email", http.StatusBadRequest)
 		return
 	}
 
-	rawKey, err := generateAPIKey() // generate a new API key using the generateAPIKey function; if it fails, return a 500 Internal Server Error
+	rawKey, err := generateAPIKey() // generate a new API key using the generateAPIKey function
+	// if it fails, return a 500 Internal Server Error
 	if err != nil {
 		http.Error(w, "failed to generate API key", http.StatusInternalServerError)
 		return
