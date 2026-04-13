@@ -19,3 +19,14 @@ const AuthPathKey = "/auth/{key}"
 const StatusPath = "/envdash/v1/status/"
 const APIKeyHeader = "Authorization"
 const BaseAPIKeyStarter = "sk-envdash-"
+
+const (
+	TargetCurrency       = "target currency"
+	AddTargetCurrency    = "add target currency"
+	RemoveTargetCurrency = "remove target currency"
+)
+
+const (
+	IsoCodeLength      = 2
+	CurrencyCodeLength = 3
+)
