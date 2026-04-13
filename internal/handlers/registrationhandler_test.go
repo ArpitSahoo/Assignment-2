@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"assignment-2/internal/utility"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,7 +14,669 @@ import (
 
 	"cloud.google.com/go/firestore"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func newTestRegistrationHandler(t *testing.T) *Handler {
+	t.Helper()
+
+	clearFirestoreEmulator(t)
+
+	return &Handler{
+		Client: newTestFirestoreClient(t),
+	}
+}
+
+func createRegistrationThroughHandler(t *testing.T, h *Handler, body string) utility.RegistrationResponse {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodPost, utility.RegistrationPath, bytes.NewBufferString(body))
+	rr := httptest.NewRecorder()
+
+	h.addRegistration(rr, req)
+
+	assert.Equal(t, http.StatusCreated, rr.Code, "body=%s", rr.Body.String())
+
+	var resp utility.RegistrationResponse
+	require.NoError(t, json.NewDecoder(rr.Body).Decode(&resp), "failed to decode registration response")
+	assert.NotEmpty(t, resp.ID, "expected registration ID in response")
+
+	return resp
+}
+
+func TestAddRegistrationWithPartialUpdateRegistrationSuccess_TableDriven(t *testing.T) {
+	tests := []struct {
+		name       string
+		createBody string
+		patchBody  string
+		wantStatus int
+		wantDoc    map[string]any
+	}{
+		{
+			name: "replace all target currencies",
+			createBody: `{
+            	"country": "Norway",
+                "isoCode": "NO",
+                "features": {
+					"temperature": true,
+                    "precipitation": true,
+                    "airQuality": true,
+                    "capital": true,
+                    "coordinates": true,
+                    "population": true,
+                    "area": true,
+                    "targetCurrencies": ["EUR", "USD", "SEK"]
+                }    
+            }`,
+			patchBody: `{
+            	"features": {
+                	"targetCurrencies": ["AUD"]
+				}
+            }`,
+			wantStatus: http.StatusOK,
+			wantDoc: map[string]any{
+				"country": "Norway",
+				"isoCode": "NO",
+				"features": map[string]any{
+					"temperature":      true,
+					"precipitation":    true,
+					"airQuality":       true,
+					"capital":          true,
+					"coordinates":      true,
+					"population":       true,
+					"area":             true,
+					"targetCurrencies": []string{"AUD"},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newTestRegistrationHandler(t)
+			ctx := context.Background()
+
+			created := createRegistrationThroughHandler(t, h, tt.createBody)
+
+			req := httptest.NewRequest(http.MethodPatch, utility.RegistrationPathID+created.ID, bytes.NewBufferString(tt.patchBody))
+			req.SetPathValue("id", created.ID)
+			req.Header.Set(utility.ContentType, utility.ApplicationJSON)
+
+			rr := httptest.NewRecorder()
+			h.partialUpdateRegistration(rr, req)
+
+			assert.Equal(t, tt.wantStatus, rr.Code, rr.Body.String())
+			assert.Equal(t, "", rr.Body.String())
+
+			doc, err := h.Client.Collection(utility.RegistrationsCollection).Doc(created.ID).Get(ctx)
+			require.NoError(t, err)
+
+			gotDoc := doc.Data()
+
+			assert.Equal(t, tt.wantDoc["country"], gotDoc["country"])
+			assert.Equal(t, tt.wantDoc["isoCode"], gotDoc["isoCode"])
+			assert.NotEmpty(t, gotDoc["features"])
+
+			gotFeatures, ok := gotDoc["features"].(map[string]any)
+			require.True(t, ok)
+
+			wantFeatures := tt.wantDoc["features"].(map[string]any)
+			assert.Equal(t, wantFeatures["temperature"], gotFeatures["temperature"])
+			assert.Equal(t, wantFeatures["precipitation"], gotFeatures["precipitation"])
+			assert.Equal(t, wantFeatures["airQuality"], gotFeatures["airQuality"])
+			assert.Equal(t, wantFeatures["capital"], gotFeatures["capital"])
+			assert.Equal(t, wantFeatures["coordinates"], gotFeatures["coordinates"])
+			assert.Equal(t, wantFeatures["population"], gotFeatures["population"])
+			assert.Equal(t, wantFeatures["area"], gotFeatures["area"])
+
+			assert.ElementsMatch(t, wantFeatures["targetCurrencies"], gotFeatures["targetCurrencies"])
+		})
+	}
+}
+
+func TestPartialUpdateRegistrationSuccess_TableDriven(t *testing.T) {
+	tests := []struct {
+		name         string
+		initialDocID string
+		initialDoc   map[string]any
+		body         string
+		wantStatus   int
+		wantDoc      map[string]any
+	}{
+		{
+			name:         "replace all target currencies",
+			initialDocID: "reg-001",
+			initialDoc: map[string]any{
+				"country": "Norway",
+				"isoCode": "NO",
+				"features": map[string]any{
+					"temperature":      true,
+					"precipitation":    true,
+					"airQuality":       true,
+					"capital":          true,
+					"coordinates":      true,
+					"population":       true,
+					"area":             true,
+					"targetCurrencies": []string{"EUR", "USD", "SEK"},
+				},
+				"lastChange": "old",
+			},
+			body: `{
+                "features": {
+                    "targetCurrencies": ["AUD"] 
+			    }
+		    }`,
+			wantStatus: http.StatusOK,
+			wantDoc: map[string]any{
+				"country": "Norway",
+				"isoCode": "NO",
+				"features": map[string]any{
+					"temperature":      true,
+					"precipitation":    true,
+					"airQuality":       true,
+					"capital":          true,
+					"coordinates":      true,
+					"population":       true,
+					"area":             true,
+					"targetCurrencies": []string{"AUD"},
+				},
+			},
+		},
+		{
+			name:         "replace empty target currencies list with normalization check",
+			initialDocID: "reg-011",
+			initialDoc: map[string]any{
+				"country": "Norway",
+				"isoCode": "NO",
+				"features": map[string]any{
+					"temperature":      true,
+					"precipitation":    true,
+					"airQuality":       true,
+					"capital":          true,
+					"coordinates":      true,
+					"population":       true,
+					"area":             true,
+					"targetCurrencies": []string{},
+				},
+				"lastChange": "old",
+			},
+			body: `{
+                "features": {
+                    "targetCurrencies": [" aUd "] 
+			    }
+		    }`,
+			wantStatus: http.StatusOK,
+			wantDoc: map[string]any{
+				"country": "Norway",
+				"isoCode": "NO",
+				"features": map[string]any{
+					"temperature":      true,
+					"precipitation":    true,
+					"airQuality":       true,
+					"capital":          true,
+					"coordinates":      true,
+					"population":       true,
+					"area":             true,
+					"targetCurrencies": []string{"AUD"},
+				},
+			},
+		},
+		{
+			name:         "replace all target currencies and set booleans to false",
+			initialDocID: "reg-021",
+			initialDoc: map[string]any{
+				"country": "Norway",
+				"isoCode": "NO",
+				"features": map[string]any{
+					"temperature":      true,
+					"precipitation":    true,
+					"airQuality":       true,
+					"capital":          true,
+					"coordinates":      true,
+					"population":       true,
+					"area":             true,
+					"targetCurrencies": []string{"EUR", "USD", "SEK"},
+				},
+				"lastChange": "old",
+			},
+			body: `{
+                "features": {
+                    "temperature":      false,
+					"precipitation":    false,
+					"airQuality":       false,
+					"capital":          false,
+					"coordinates":      false,
+					"population":       false,
+					"area":             false,
+                    "targetCurrencies": ["AUD"] 
+			    }
+		    }`,
+			wantStatus: http.StatusOK,
+			wantDoc: map[string]any{
+				"country": "Norway",
+				"isoCode": "NO",
+				"features": map[string]any{
+					"temperature":      false,
+					"precipitation":    false,
+					"airQuality":       false,
+					"capital":          false,
+					"coordinates":      false,
+					"population":       false,
+					"area":             false,
+					"targetCurrencies": []string{"AUD"},
+				},
+			},
+		},
+		{
+			name:         "add an additional target currency",
+			initialDocID: "reg-002",
+			initialDoc: map[string]any{
+				"country": "Norway",
+				"isoCode": "NO",
+				"features": map[string]any{
+					"temperature":      true,
+					"precipitation":    true,
+					"airQuality":       true,
+					"capital":          true,
+					"coordinates":      true,
+					"population":       true,
+					"area":             true,
+					"targetCurrencies": []string{"EUR", "USD", "SEK"},
+				},
+				"lastChange": "old",
+			},
+			body: `{
+				"features": {
+					"addTargetCurrencies": ["AUD"]
+				}
+			}`,
+			wantStatus: http.StatusOK,
+			wantDoc: map[string]any{
+				"country": "Norway",
+				"isoCode": "NO",
+				"features": map[string]any{
+					"temperature":      true,
+					"precipitation":    true,
+					"airQuality":       true,
+					"capital":          true,
+					"coordinates":      true,
+					"population":       true,
+					"area":             true,
+					"targetCurrencies": []string{"EUR", "USD", "SEK", "AUD"},
+				},
+			},
+		},
+		{
+			name:         "add target currency into an empty starting array",
+			initialDocID: "reg-022",
+			initialDoc: map[string]any{
+				"country": "Norway",
+				"isoCode": "NO",
+				"features": map[string]any{
+					"temperature":      true,
+					"precipitation":    true,
+					"airQuality":       true,
+					"capital":          true,
+					"coordinates":      true,
+					"population":       true,
+					"area":             true,
+					"targetCurrencies": []string{},
+				},
+				"lastChange": "old",
+			},
+			body: `{
+				"features": {
+					"addTargetCurrencies": ["EUR"]
+				}
+			}`,
+			wantStatus: http.StatusOK,
+			wantDoc: map[string]any{
+				"country": "Norway",
+				"isoCode": "NO",
+				"features": map[string]any{
+					"temperature":      true,
+					"precipitation":    true,
+					"airQuality":       true,
+					"capital":          true,
+					"coordinates":      true,
+					"population":       true,
+					"area":             true,
+					"targetCurrencies": []string{"EUR"},
+				},
+			},
+		},
+		{
+			name:         "add additional target currency and add ones that already exists with normalization check",
+			initialDocID: "reg-012",
+			initialDoc: map[string]any{
+				"country": "Norway",
+				"isoCode": "NO",
+				"features": map[string]any{
+					"temperature":      true,
+					"precipitation":    true,
+					"airQuality":       true,
+					"capital":          true,
+					"coordinates":      true,
+					"population":       true,
+					"area":             true,
+					"targetCurrencies": []string{"EUR", "USD", "SEK"},
+				},
+				"lastChange": "old",
+			},
+			body: `{
+				"features": {
+					"addTargetCurrencies": ["EuR ", "uSD ", " SEk ", "aud"]
+				}
+			}`,
+			wantStatus: http.StatusOK,
+			wantDoc: map[string]any{
+				"country": "Norway",
+				"isoCode": "NO",
+				"features": map[string]any{
+					"temperature":      true,
+					"precipitation":    true,
+					"airQuality":       true,
+					"capital":          true,
+					"coordinates":      true,
+					"population":       true,
+					"area":             true,
+					"targetCurrencies": []string{"EUR", "USD", "SEK", "AUD"},
+				},
+			},
+		},
+		{
+			name:         "add an additional target currency and set booleans to false",
+			initialDocID: "reg-032",
+			initialDoc: map[string]any{
+				"country": "Norway",
+				"isoCode": "NO",
+				"features": map[string]any{
+					"temperature":      true,
+					"precipitation":    true,
+					"airQuality":       true,
+					"capital":          true,
+					"coordinates":      true,
+					"population":       true,
+					"area":             true,
+					"targetCurrencies": []string{"EUR", "USD", "SEK"},
+				},
+				"lastChange": "old",
+			},
+			body: `{
+				"features": {
+					"temperature":      false,
+					"precipitation":    false,
+					"airQuality":       false,
+					"capital":          false,
+					"coordinates":      false,
+					"population":       false,
+					"area":             false,
+					"addTargetCurrencies": ["AUD"]
+				}
+			}`,
+			wantStatus: http.StatusOK,
+			wantDoc: map[string]any{
+				"country": "Norway",
+				"isoCode": "NO",
+				"features": map[string]any{
+					"temperature":      false,
+					"precipitation":    false,
+					"airQuality":       false,
+					"capital":          false,
+					"coordinates":      false,
+					"population":       false,
+					"area":             false,
+					"targetCurrencies": []string{"EUR", "USD", "SEK", "AUD"},
+				},
+			},
+		},
+		{
+			name:         "remove one target currency",
+			initialDocID: "reg-003",
+			initialDoc: map[string]any{
+				"country": "Norway",
+				"isoCode": "NO",
+				"features": map[string]any{
+					"temperature":      true,
+					"precipitation":    true,
+					"airQuality":       true,
+					"capital":          true,
+					"coordinates":      true,
+					"population":       true,
+					"area":             true,
+					"targetCurrencies": []string{"EUR", "USD", "SEK"},
+				},
+				"lastChange": "old",
+			},
+			body: `{
+                "features": {
+                    "removeTargetCurrencies": ["EUR"]
+				}
+			}`,
+			wantStatus: http.StatusOK,
+			wantDoc: map[string]any{
+				"country": "Norway",
+				"isoCode": "NO",
+				"features": map[string]any{
+					"temperature":      true,
+					"precipitation":    true,
+					"airQuality":       true,
+					"capital":          true,
+					"coordinates":      true,
+					"population":       true,
+					"area":             true,
+					"targetCurrencies": []string{"USD", "SEK"},
+				},
+			},
+		},
+		{
+			name:         "remove all target currencies",
+			initialDocID: "reg-013",
+			initialDoc: map[string]any{
+				"country": "Norway",
+				"isoCode": "NO",
+				"features": map[string]any{
+					"temperature":      true,
+					"precipitation":    true,
+					"airQuality":       true,
+					"capital":          true,
+					"coordinates":      true,
+					"population":       true,
+					"area":             true,
+					"targetCurrencies": []string{"EUR", "USD", "SEK"},
+				},
+				"lastChange": "old",
+			},
+			body: `{
+                "features": {
+                    "removeTargetCurrencies": ["EUR", "USD", "SEK"]
+                }
+		   }`,
+			wantStatus: http.StatusOK,
+			wantDoc: map[string]any{
+				"country": "Norway",
+				"isoCode": "NO",
+				"features": map[string]any{
+					"temperature":      true,
+					"precipitation":    true,
+					"airQuality":       true,
+					"capital":          true,
+					"coordinates":      true,
+					"population":       true,
+					"area":             true,
+					"targetCurrencies": []string{},
+				},
+			},
+		},
+		{
+			name:         "remove all target currencies with normalization check",
+			initialDocID: "reg-014",
+			initialDoc: map[string]any{
+				"country": "Norway",
+				"isoCode": "NO",
+				"features": map[string]any{
+					"temperature":      true,
+					"precipitation":    true,
+					"airQuality":       true,
+					"capital":          true,
+					"coordinates":      true,
+					"population":       true,
+					"area":             true,
+					"targetCurrencies": []string{"EUR", "USD", "SEK"},
+				},
+				"lastChange": "old",
+			},
+			body: `{
+                "features": {
+                    "removeTargetCurrencies": [" EuR", " usd ", "SEk "]
+                }
+		   }`,
+			wantStatus: http.StatusOK,
+			wantDoc: map[string]any{
+				"country": "Norway",
+				"isoCode": "NO",
+				"features": map[string]any{
+					"temperature":      true,
+					"precipitation":    true,
+					"airQuality":       true,
+					"capital":          true,
+					"coordinates":      true,
+					"population":       true,
+					"area":             true,
+					"targetCurrencies": []string{},
+				},
+			},
+		},
+		{
+			name:         "remove one target currency and set booleans to false",
+			initialDocID: "reg-015",
+			initialDoc: map[string]any{
+				"country": "Norway",
+				"isoCode": "NO",
+				"features": map[string]any{
+					"temperature":      true,
+					"precipitation":    true,
+					"airQuality":       true,
+					"capital":          true,
+					"coordinates":      true,
+					"population":       true,
+					"area":             true,
+					"targetCurrencies": []string{"EUR", "USD", "SEK"},
+				},
+				"lastChange": "old",
+			},
+			body: `{
+                "features": {
+                    "temperature":      false,
+					"precipitation":    false,
+                    "airQuality":       false,
+					"capital":          false,
+					"coordinates":      false,
+					"population":       false,
+					"area":             false,
+                    "removeTargetCurrencies": ["EUR"]
+				}
+			}`,
+			wantStatus: http.StatusOK,
+			wantDoc: map[string]any{
+				"country": "Norway",
+				"isoCode": "NO",
+				"features": map[string]any{
+					"temperature":      false,
+					"precipitation":    false,
+					"airQuality":       false,
+					"capital":          false,
+					"coordinates":      false,
+					"population":       false,
+					"area":             false,
+					"targetCurrencies": []string{"USD", "SEK"},
+				},
+			},
+		},
+		{
+			name:         "replace country with normalization check",
+			initialDocID: "reg-006",
+			initialDoc: map[string]any{
+				"country": "Norway",
+				"isoCode": "NO",
+				"features": map[string]any{
+					"temperature":      true,
+					"precipitation":    true,
+					"airQuality":       true,
+					"capital":          true,
+					"coordinates":      true,
+					"population":       true,
+					"area":             true,
+					"targetCurrencies": []string{"EUR", "USD", "SEK"},
+				},
+				"lastChange": "old",
+			},
+			body: `{
+                "country": " New Zealand ",
+                "isoCode": "nZ ",
+				"features": {}
+		    }`,
+			wantStatus: http.StatusOK,
+			wantDoc: map[string]any{
+				"country": "New Zealand",
+				"isoCode": "NZ",
+				"features": map[string]any{
+					"temperature":      true,
+					"precipitation":    true,
+					"airQuality":       true,
+					"capital":          true,
+					"coordinates":      true,
+					"population":       true,
+					"area":             true,
+					"targetCurrencies": []string{"EUR", "USD", "SEK"},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newTestRegistrationHandler(t)
+			ctx := context.Background()
+
+			_, err := h.Client.Collection(utility.RegistrationsCollection).Doc(tt.initialDocID).Set(ctx, tt.initialDoc)
+			require.NoError(t, err)
+
+			req := httptest.NewRequest(http.MethodPatch, utility.RegistrationPathID+tt.initialDocID, bytes.NewBufferString(tt.body))
+			req.SetPathValue("id", tt.initialDocID)
+			req.Header.Set(utility.ContentType, utility.ApplicationJSON)
+
+			rr := httptest.NewRecorder()
+
+			h.partialUpdateRegistration(rr, req)
+
+			assert.Equal(t, tt.wantStatus, rr.Code, rr.Body.String())
+			assert.Equal(t, "", rr.Body.String())
+
+			doc, errGet := h.Client.Collection(utility.RegistrationsCollection).Doc(tt.initialDocID).Get(ctx)
+			require.NoError(t, errGet)
+
+			gotDoc := doc.Data()
+
+			assert.Equal(t, tt.wantDoc["country"], gotDoc["country"])
+			assert.Equal(t, tt.wantDoc["isoCode"], gotDoc["isoCode"])
+			assert.NotEmpty(t, gotDoc["lastChange"])
+
+			gotFeatures, ok := gotDoc["features"].(map[string]any)
+			require.True(t, ok)
+
+			wantFeatures := tt.wantDoc["features"].(map[string]any)
+			assert.Equal(t, wantFeatures["temperature"], gotFeatures["temperature"])
+			assert.Equal(t, wantFeatures["precipitation"], gotFeatures["precipitation"])
+			assert.Equal(t, wantFeatures["airQuality"], gotFeatures["airQuality"])
+			assert.Equal(t, wantFeatures["capital"], gotFeatures["capital"])
+			assert.Equal(t, wantFeatures["coordinates"], gotFeatures["coordinates"])
+			assert.Equal(t, wantFeatures["population"], gotFeatures["population"])
+			assert.Equal(t, wantFeatures["area"], gotFeatures["area"])
+			assert.ElementsMatch(t, wantFeatures["targetCurrencies"], gotFeatures["targetCurrencies"])
+		})
+	}
+}
 
 func TestHandleAllGetRegistrations(t *testing.T) {
 	handler := &Handler{}
