@@ -27,3 +27,12 @@ type RegistrationResponse struct {
 	ID         string `json:"id"`
 	LastChange string `json:"lastChange"`
 }
+
+// StoredRegistration represents a registration document as persisted in Firestore.
+type StoredRegistration struct {
+	ID         string               `json:"id,omitempty" firestore:"-"`
+	Country    string               `json:"country" firestore:"country"`
+	IsoCode    string               `json:"isoCode" firestore:"isoCode"`
+	Features   RegistrationFeatures `json:"features" firestore:"features"`
+	LastChange string               `json:"lastChange" firestore:"lastChange"`
+}
