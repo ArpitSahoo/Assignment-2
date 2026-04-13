@@ -41,3 +41,7 @@ func (h *Handler) APIKeyMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r) // if the API key is valid, proceed to the next handler in the chain
 	})
 }
+
+// TODO find out if middleware should be in this folder or in a separate one, and if it should be in the same
+// file as the auth handler or not. I think it should be in a separate file, beacuse it is a separate concern from the auth handler,
+// and it could be in the handlers folder because it is related to handling HTTP requests.
