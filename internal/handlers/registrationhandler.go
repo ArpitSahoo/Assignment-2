@@ -47,14 +47,6 @@ var setRegistrationDoc = func(ctx context.Context, client *firestore.Client, id 
 	return err
 }
 
-// setRegistrationPatchDoc updates a registration document registered to a specific
-// registration ID, allows partial update. Defined as variable to allow for replacement in tests.
-// TODO: Remove after creating firebase/spoof test
-var setRegistrationPatchDoc = func(ctx context.Context, client *firestore.Client, id string, update []firestore.Update) error {
-	_, err := client.Collection(utility.RegistrationsCollection).Doc(id).Update(ctx, update)
-	return err
-}
-
 // deleteRegistrationDoc deletes a registration document registered to a specific
 // registration ID. Defined as variable to allow for replacement in tests.
 var deleteRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
@@ -104,7 +96,7 @@ func (h *Handler) HandleRegReq(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		h.replaceRegistration(w, r)
 	case http.MethodPatch:
-		h.patchRegistration(w, r)
+		h.partialUpdateRegistration(w, r)
 	case http.MethodDelete:
 		h.deleteRegistration(w, r)
 	default:
@@ -167,7 +159,7 @@ func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleAllGetRegistration(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received %s request", r.Method)
 	docID := strings.TrimSpace(r.PathValue("id"))
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(utility.ContentType, utility.ApplicationJSON)
 
 	// HEAD → return headers only
 	if r.Method == http.MethodHead {
@@ -301,11 +293,11 @@ func (h *Handler) replaceRegistration(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// patchRegistration handles PATCH requests to the /registrations/{id} endpoint.
+// partialUpdateRegistration handles PATCH requests to the /registrations/{id} endpoint.
 // It decodes, normalizes and validates the request body, applies partial updates
 // of a configuration for the given ID, updates the last-change timestamp and returns
 // 200 OK with an empty body on success.
-func (h *Handler) patchRegistration(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) partialUpdateRegistration(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received %s request", r.Method)
 
 	id := strings.TrimSpace(r.PathValue("id"))
@@ -335,7 +327,7 @@ func (h *Handler) patchRegistration(w http.ResponseWriter, r *http.Request) {
 	update := buildGeneralPatchUpdate(&regReq, lastChange)
 	update = append(update, buildCurrencyPatchUpdate(regReq.Features)...)
 
-	errSet := setRegistrationPatchDoc(ctxPatch, h.Client, id, update)
+	_, errSet := h.Client.Collection(utility.RegistrationsCollection).Doc(id).Update(ctxPatch, update)
 	if errSet != nil {
 		log.Printf("Failed to update registration: %v", errSet)
 		http.Error(w, "failed updating registration", http.StatusInternalServerError)
