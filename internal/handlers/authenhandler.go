@@ -67,7 +67,7 @@ func (h *Handler) createAPIKey(w http.ResponseWriter, r *http.Request) {
 
 	rawKey, err := generateAPIKey() // generate a new API key using the generateAPIKey function; if it fails, return a 500 Internal Server Error
 	if err != nil {
-		http.Error(w, "failed to generate api key", http.StatusInternalServerError)
+		http.Error(w, "failed to generate API key", http.StatusInternalServerError)
 		return
 	}
 
@@ -83,7 +83,7 @@ func (h *Handler) createAPIKey(w http.ResponseWriter, r *http.Request) {
 	ctx := firestoreContext(r)
 	_, err = h.Client.Collection(utility.APIKeysCollection).Doc(doc.Hash).Set(ctx, doc) // store the API key document in the Firestore
 	if err != nil {                                                                     // if it fails, return a 500 Internal Server Error
-		http.Error(w, "failed to store api key", http.StatusInternalServerError)
+		http.Error(w, "failed to store API key", http.StatusInternalServerError)
 		return
 	}
 
@@ -102,7 +102,7 @@ func (h *Handler) createAPIKey(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) revokeAPIKey(w http.ResponseWriter, r *http.Request) {
 	rawKey := strings.TrimSpace(r.PathValue("key")) // extract the raw API key from the URL path and trim whitespace
 	if rawKey == "" {                               // if the raw key is empty, return a 404 Not Found error
-		http.Error(w, "api key not provided", http.StatusNotFound)
+		http.Error(w, "API key not provided", http.StatusNotFound)
 		return
 	}
 
@@ -112,22 +112,22 @@ func (h *Handler) revokeAPIKey(w http.ResponseWriter, r *http.Request) {
 	doc, err := ref.Get(ctx)
 	if err != nil { // if there is an error retrieving the document, check if it's a Not Found error; if so, return a 404 Not Found error
 		if isNotFound(err) { // check if it's a Not Found error; if so, return a 404 Not Found error
-			http.Error(w, "api key not found", http.StatusNotFound)
+			http.Error(w, "API key not found", http.StatusNotFound)
 			return
 		}
-		http.Error(w, "failed to revoke api key", http.StatusInternalServerError) // otherwise return a 500 Internal Server Error
+		http.Error(w, "failed to revoke API key", http.StatusInternalServerError) // otherwise return a 500 Internal Server Error
 		return
 	}
 
 	var existing utility.APIKeyDoc // create a variable to hold the existing API key document data
 	// decode the Firestore document data into the existing variable;
 	if err := doc.DataTo(&existing); err != nil { //if it fails, return a 500 Internal Server Error
-		http.Error(w, "failed to revoke api key", http.StatusInternalServerError)
+		http.Error(w, "failed to revoke API key", http.StatusInternalServerError)
 		return
 	}
 
 	if existing.Revoked { // if the API key is already revoked, return a 404 Not Found error
-		http.Error(w, "api key not found", http.StatusNotFound)
+		http.Error(w, "API key not found", http.StatusNotFound)
 		return
 	}
 
@@ -137,7 +137,7 @@ func (h *Handler) revokeAPIKey(w http.ResponseWriter, r *http.Request) {
 	}, firestore.MergeAll)
 
 	if err != nil { // if there is an error updating the document, return a 500 Internal Server Error
-		http.Error(w, "failed to revoke api key", http.StatusInternalServerError)
+		http.Error(w, "failed to revoke API key", http.StatusInternalServerError)
 		return
 	}
 
@@ -162,17 +162,17 @@ func (h *Handler) APIKeyMiddleware(next http.Handler) http.Handler {
 
 		apiKey := strings.TrimSpace(r.Header.Get(utility.APIKeyHeader))
 		if apiKey == "" { // if the API key is missing from the request header, return a 401 Unauthorized error
-			http.Error(w, "missing api key", http.StatusUnauthorized)
+			http.Error(w, "missing API key, please enter an API key.", http.StatusUnauthorized)
 			return
 		}
 
 		valid, err := validateAPIKeyImpl(h, r, apiKey) // validate the API key using the validateAPIKeyImpl function
 		if err != nil {                                // if there is an error during validation, return a 500 Internal Server Error
-			http.Error(w, "failed to validate api key", http.StatusInternalServerError)
+			http.Error(w, "failed to validate API key", http.StatusInternalServerError)
 			return
 		}
 		if !valid { // if the API key is invalid or revoked, return a 403 Forbidden error
-			http.Error(w, "invalid or revoked api key", http.StatusForbidden)
+			http.Error(w, "invalid or revoked API key", http.StatusForbidden)
 			return
 		}
 
@@ -209,7 +209,7 @@ func generateAPIKey() (string, error) {
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
-	return "sk-envdash-" + hex.EncodeToString(b), nil
+	return utility.BaseAPIKeyStarter + hex.EncodeToString(b), nil
 }
 
 // hashAPIKey takes a raw API key string and returns its SHA-256 hash encoded as a hexadecimal string.
