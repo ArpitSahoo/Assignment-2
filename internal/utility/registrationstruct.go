@@ -3,22 +3,22 @@ package utility
 // RegistrationRequest represents a JSON payload used to create or replace
 // a dashboard configuration through the /registrations endpoint.
 type RegistrationRequest struct {
-	Country  string               `json:"country"`
-	IsoCode  string               `json:"isoCode"`
-	Features RegistrationFeatures `json:"features"`
+	Country  string               `json:"country" firestore:"country"`
+	IsoCode  string               `json:"isoCode" firestore:"isoCode"`
+	Features RegistrationFeatures `json:"features" firestore:"features"`
 }
 
 // RegistrationFeatures specifies which dashboard fields to be included
 // in the dashboard configuration stored through the /registrations endpoint.
 type RegistrationFeatures struct {
-	Temperature      bool     `json:"temperature"`
-	Precipitation    bool     `json:"precipitation"`
-	AirQuality       bool     `json:"airQuality"`
-	Capital          bool     `json:"capital"`
-	Coordinates      bool     `json:"coordinates"`
-	Population       bool     `json:"population"`
-	Area             bool     `json:"area"`
-	TargetCurrencies []string `json:"targetCurrencies"`
+	Temperature      bool     `json:"temperature" firestore:"temperature"`
+	Precipitation    bool     `json:"precipitation" firestore:"precipitation"`
+	AirQuality       bool     `json:"airQuality" firestore:"airQuality"`
+	Capital          bool     `json:"capital" firestore:"capital"`
+	Coordinates      bool     `json:"coordinates" firestore:"coordinates"`
+	Population       bool     `json:"population" firestore:"population"`
+	Area             bool     `json:"area" firestore:"area"`
+	TargetCurrencies []string `json:"targetCurrencies" firestore:"targetCurrencies"`
 }
 
 // RegistrationResponse is a JSON response returned by the /registrations
