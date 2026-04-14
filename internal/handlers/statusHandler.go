@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -38,7 +37,7 @@ func (h *Handler) handleGetStatus(w http.ResponseWriter) {
 	resp := utility.StatusResponse{
 		RestCountriesAPI: results["restCountries"],
 		MeteoAPI:         results["meteo"],
-		OpenAQ:           checkOpenAQStatus(),
+		OpenAQ:           results["openAQ"],
 		NominatimAPI:     results["nominatim"],
 		CurrencyAPI:      results["currency"],
 		NotificationDB:   h.probeFirestore(),
@@ -53,17 +52,6 @@ func (h *Handler) handleGetStatus(w http.ResponseWriter) {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 		return
 	}
-}
-
-func (h *Handler) getWebhookCount() int {
-	webhookCount := 0
-	docs, err := h.Client.Collection(utility.WebhooksCollection).Documents(context.Background()).GetAll()
-	if err != nil {
-		log.Printf("Could not fetch webhook count: %v", err)
-	} else {
-		webhookCount = len(docs)
-	}
-	return webhookCount
 }
 
 // getAPIStatuses checks the status of each external API concurrently
@@ -97,33 +85,6 @@ func getAPIStatuses() map[string]int {
 		results[r.Name] = r.Status
 	}
 	return results
-}
-
-// checkAPIStatus probes a URL with an optional API key and returns the HTTP status code.
-// Returns 500 if the request fails.
-func checkOpenAQStatus() int {
-	url := utility.OpenAQProbe
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return http.StatusInternalServerError
-	}
-
-	apiKey := os.Getenv("OPENAQ_API_KEY")
-	req.Header.Set("X-API-Key", apiKey)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		log.Printf("Failed to reach %s: %v", url, err)
-		return http.StatusInternalServerError
-	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			log.Printf("Failed to close response body : %v", err)
-		}
-	}(resp.Body)
-
-	return resp.StatusCode
 }
 
 // checkAPIStatus checks the status of an API by making a GET request.
@@ -167,4 +128,15 @@ func (h *Handler) probeFirestore() int {
 		return http.StatusInternalServerError
 	}
 	return http.StatusOK
+}
+
+func (h *Handler) getWebhookCount() int {
+	webhookCount := 0
+	docs, err := h.Client.Collection(utility.WebhooksCollection).Documents(context.Background()).GetAll()
+	if err != nil {
+		log.Printf("Could not fetch webhook count: %v", err)
+	} else {
+		webhookCount = len(docs)
+	}
+	return webhookCount
 }
