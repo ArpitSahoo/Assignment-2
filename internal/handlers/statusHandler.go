@@ -130,8 +130,10 @@ func (h *Handler) probeFirestore() int {
 	return http.StatusOK
 }
 
+// getWebhookCount returns the number of webhooks currently stored in Firestore.
+// Returns -1 if collection cannot be retrieved.
 func (h *Handler) getWebhookCount() int {
-	webhookCount := 0
+	webhookCount := -1
 	docs, err := h.Client.Collection(utility.WebhooksCollection).Documents(context.Background()).GetAll()
 	if err != nil {
 		log.Printf("Could not fetch webhook count: %v", err)
