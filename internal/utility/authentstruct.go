@@ -17,6 +17,4 @@ type APIKeyDoc struct {
 	Email     string    `firestore:"email"`
 	Hash      string    `firestore:"hash"`
 	CreatedAt time.Time `firestore:"createdAt"`
-	Revoked   bool      `firestore:"revoked"`
-	RevokedAt time.Time `firestore:"revokedAt,omitempty"`
 }
