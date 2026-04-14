@@ -21,11 +21,12 @@ const CurrencyAPIURL = "https://api.exchangerate-api.com/v4/latest/{cur}"
 const ContentType = "Content-Type"
 const ApplicationJSON = "application/json"
 
-const RestCountriesAPI = "http://129.241.150.113:8080/v3.1/all?fields=name"
-const CurrencyAPI = "http://129.241.150.113:9090/currency/NOK/"
-const MeteoAPI = "https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&current=temperature_2m"
-const OpenAQAPI = "https://api.openaq.org/v3/parameters/2"
-const NominatimAPI = "https://nominatim.openstreetmap.org/search?q=Oslo&format=jsonv2&limit=1"
+const StatusPath = "/status/"
+const RestCountriesProbe = "http://129.241.150.113:8080/v3.1/alpha/NO"
+const CurrencyProbe = "http://129.241.150.113:9090/currency/NOK/"
+const MeteoProbe = "https://api.open-meteo.com/v1/forecast?latitude=0&longitude=0&current=temperature_2m"
+const OpenAQProbe = "https://api.openaq.org/v3/parameters/2"
+const NominatimProbe = "https://nominatim.openstreetmap.org/status.php?format=json"
 
 const (
 	TargetCurrency       = "target currency"
