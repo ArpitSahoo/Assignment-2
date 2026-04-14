@@ -24,6 +24,7 @@ func (h *Handler) HandleStatus(w http.ResponseWriter, r *http.Request) {
 		h.handleGetStatus(w)
 	default:
 		http.Error(w, "method not allowed, please use GET", http.StatusMethodNotAllowed)
+		log.Printf("method not allowed: %d", http.StatusMethodNotAllowed)
 	}
 }
 
@@ -50,6 +51,7 @@ func (h *Handler) handleGetStatus(w http.ResponseWriter) {
 	err := json.NewEncoder(w).Encode(resp)
 	if err != nil {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		log.Printf("failed to encode response: %d", http.StatusInternalServerError)
 		return
 	}
 }
