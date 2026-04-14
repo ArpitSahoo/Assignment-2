@@ -78,7 +78,6 @@ func (h *Handler) createAPIKey(w http.ResponseWriter, r *http.Request) {
 		Email:     req.Email,
 		Hash:      hashAPIKey(rawKey), // hash the raw API to store only the hash in Firestore for security reasons
 		CreatedAt: now,
-		Revoked:   false,
 	}
 
 	ctx := firestoreContext(r)
@@ -146,7 +145,7 @@ func (h *Handler) validateAPIKey(r *http.Request, rawKey string) (bool, error) {
 	if err := doc.DataTo(&data); err != nil { // decode the Firestore document data into the variable
 		return false, err // if it fails, return false with the error
 	}
-	return !data.Revoked, nil // return true if the API key is valid (not revoked), otherwise return false
+	return true, nil // if the document is found and decoded successfully, return true (valid API key)
 }
 
 // generateAPIKey creates a new random API key string with a specific prefix. It generates 8 random bytes,
