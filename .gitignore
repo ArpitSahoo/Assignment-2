@@ -1,0 +1,11 @@
+#IDE
+.idea/
+
+#JSON
+.json
+
+#Environment files
+.env
+
+#Firebase secret file
+assigment-2-firebase-secret.json
