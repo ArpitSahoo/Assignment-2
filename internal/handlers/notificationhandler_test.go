@@ -75,17 +75,17 @@ func clearFirestoreEmulator(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "unexpected cleanup status")
 }
 
-func newTestHandler(t *testing.T) *HandlerWebhooks {
+func newTestHandler(t *testing.T) *Handler {
 	t.Helper()
 
 	clearFirestoreEmulator(t)
 
-	return &HandlerWebhooks{
+	return &Handler{
 		Client: newTestFirestoreClient(t),
 	}
 }
 
-func createWebhookThroughHandler(t *testing.T, h *HandlerWebhooks, body string) utility.WebhookResponse {
+func createWebhookThroughHandler(t *testing.T, h *Handler, body string) utility.WebhookResponse {
 	t.Helper()
 
 	req := httptest.NewRequest(http.MethodPost, utility.NotificationPath, bytes.NewBufferString(body))
