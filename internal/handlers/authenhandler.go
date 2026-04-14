@@ -95,10 +95,13 @@ func (h *Handler) createAPIKey(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// revokeAPIKey revokes an existing API key by setting its "revoked" status to true in Firestore.
-// It retrieves the API key from the URL path, validates its existence, and updates the document accordingly.
-// If the key is not found or already revoked, it returns a 404 Not Found error.
-// On successful revocation, it returns a 204 No Content status.
+// revokeAPIKey revokes an API key by deleting its corresponding document in Firestore.
+// It retrieves the API key from the URL path, hashes it, and deletes the matching document.
+// If the API key is not provided, it returns a 400 Bad Request error.
+// If the deletion fails due to a Firestore error, it returns a 500 Internal Server Error.
+// This operation is idempotent: if the API key does not exist, the handler still returns
+// a 204 No Content response.
+// On successful execution, it returns a 204 No Content status.
 func (h *Handler) revokeAPIKey(w http.ResponseWriter, r *http.Request) {
 	rawKey := strings.TrimSpace(r.PathValue("key")) // extract the raw API key from the URL path and trim whitespace
 	if rawKey == "" {                               // if the raw key is empty, return a 404 Not Found error
