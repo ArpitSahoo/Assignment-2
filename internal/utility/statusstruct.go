@@ -7,6 +7,14 @@ type StatusResponse struct {
 	OpenAQ           int    `json:"openaq_api"`
 	NominatimAPI     int    `json:"nominatim_api"`
 	CurrencyAPI      int    `json:"currency_api"`
+	NotificationDB   int    `json:"notification_db"`
+	Webhooks         int    `json:"webhooks"`
 	Version          string `json:"version"`
 	Uptime           int    `json:"uptime"`
+}
+
+// ApiResult struct for api results
+type ApiResult struct {
+	Name   string
+	Status int
 }
