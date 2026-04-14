@@ -102,28 +102,19 @@ func (h *Handler) createAPIKey(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) revokeAPIKey(w http.ResponseWriter, r *http.Request) {
 	rawKey := strings.TrimSpace(r.PathValue("key")) // extract the raw API key from the URL path and trim whitespace
 	if rawKey == "" {                               // if the raw key is empty, return a 404 Not Found error
-		http.Error(w, "API key not provided", http.StatusNotFound)
+		http.Error(w, "API key not provided", http.StatusBadRequest)
 		return
 	}
 
 	hash := hashAPIKey(rawKey) // hash the raw API key to find the corresponding document in Firestore
 	ctx := firestoreContext(r)
 	ref := h.Client.Collection(utility.APIKeysCollection).Doc(hash) // get the document reference for the API key in Firestore
-	_, err := ref.Get(ctx)
-	if err != nil { // if there is an error retrieving the document, check if it's a Not Found error; if so, return a 404 Not Found error
-		if isNotFound(err) { // check if it's a Not Found error; if so, return a 404 Not Found error
-			http.Error(w, "API key not found", http.StatusNotFound)
-			return
-		}
-		http.Error(w, "failed to revoke API key", http.StatusInternalServerError) // otherwise return a 500 Internal Server Error
-		return
-	}
 
-	if _, err := ref.Delete(ctx); err != nil {
+	if _, err := ref.Delete(ctx); err != nil { // Delete file in firebase, if it fails, return a 500 Internal Server Error
 		http.Error(w, "failed to revoke API key", http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set(utility.ContentType, utility.ApplicationJSON)
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
