@@ -17,6 +17,7 @@ const OpenAQURLBase = "https://api.openaq.org/v3/locations?coordinates={lat},{ln
 const OSMURLBase = "https://nominatim.openstreetmap.org/search?city={cap}&countrycodes={isoCode}&format=jsonv2&addressdetails=1&limit=1"
 
 const OpenAQLatestURL = "https://api.openaq.org/v3/locations/{id}/latest"
+const CurrencyAPIURL = "https://api.exchangerate-api.com/v4/latest/{cur}"
 
 const ContentType = "Content-Type"
 const ApplicationJSON = "application/json"
