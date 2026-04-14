@@ -71,7 +71,6 @@ func (h *Handler) registerWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Println("Webhook created with ID: ", ref.ID)
-	h.WebhookCount.Add(1)
 
 	w.Header().Set(utility.ContentType, utility.ApplicationJSON)
 	w.WriteHeader(http.StatusCreated)
@@ -238,5 +237,4 @@ func (h *Handler) deleteWebhook(w http.ResponseWriter, r *http.Request, id strin
 
 	w.WriteHeader(http.StatusNoContent)
 	log.Println("Webhook with ID ", id, " deleted successfully")
-	h.WebhookCount.Add(-1)
 }
