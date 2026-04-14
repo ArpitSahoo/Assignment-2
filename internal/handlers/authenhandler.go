@@ -17,7 +17,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-var validateAPIKeyImpl = func(h *Handler, r *http.Request, rawKey string) (bool, error) {
+var ValidateAPIKeyImpl = func(h *Handler, r *http.Request, rawKey string) (bool, error) {
 	return h.validateAPIKey(r, rawKey)
 }
 
@@ -105,7 +105,7 @@ func (h *Handler) createAPIKey(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) revokeAPIKey(w http.ResponseWriter, r *http.Request) {
 	rawKey := strings.TrimSpace(r.PathValue("key")) // extract the raw API key from the URL path and trim whitespace
 	if rawKey == "" {                               // if the raw key is empty, return a 404 Not Found error
-		http.Error(w, "API key not provided", http.StatusBadRequest)
+		http.Error(w, "API key not provided, please add the API key in the url", http.StatusBadRequest)
 		return
 	}
 
@@ -141,6 +141,8 @@ func (h *Handler) validateAPIKey(r *http.Request, rawKey string) (bool, error) {
 	}
 	return true, nil // if the document is found and decoded successfully, return true (valid API key)
 }
+
+//TODO move the code down below to their own package
 
 // generateAPIKey creates a new random API key string with a specific prefix. It generates 8 random bytes,
 // encodes them as a hexadecimal string, and concatenates it with the prefix "sk-envdash-" to form the complete API key.
