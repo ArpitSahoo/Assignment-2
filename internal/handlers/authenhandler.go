@@ -43,7 +43,6 @@ func (h *Handler) createAPIKey(w http.ResponseWriter, r *http.Request) {
 		err := Body.Close()
 		if err != nil {
 			log.Printf("Error closing body: %v", err)
-			http.Error(w, "Error closing body", http.StatusInternalServerError)
 		}
 	}(r.Body)
 
