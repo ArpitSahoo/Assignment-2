@@ -21,6 +21,7 @@ import (
 type Handler struct {
 	Client            *firestore.Client
 	RegistrationCount atomic.Int64
+	WebhookCount      atomic.Int64
 }
 
 // addRegistrationDocImpl stores a registration document, returns a generated ID.
