@@ -17,11 +17,12 @@ import (
 	"cloud.google.com/go/firestore"
 )
 
-// TODO add comments
-// TODO os.Getenv eller sånn .env fil ting
-
+// OpenAQAPIKey is the API key for the OpenAQ air quality service,
+// loaded from the OPENAQ_API_KEY environment variable.
 var OpenAQAPIKey = os.Getenv("OPENAQ_API_KEY")
 
+// getRegistrationByID retrieves a stored registration from Firestore by its document ID.
+// Returns the populated StoredRegistration with its ID set, or an error if not found.
 func getRegistrationByID(ctx context.Context, client *firestore.Client, id string) (utility.StoredRegistration, error) {
 	doc, err := client.Collection(utility.RegistrationsCollection).Doc(id).Get(ctx)
 	if err != nil {
@@ -37,6 +38,9 @@ func getRegistrationByID(ctx context.Context, client *firestore.Client, id strin
 	return reg, nil
 }
 
+// DashboardHandler handles GET requests to the dashboard endpoint.
+// It fetches registration data, then aggregates country info, weather, air quality,
+// and exchange rates based on the features enabled in the registration.
 func (h *Handler) DashboardHandler(w http.ResponseWriter, r *http.Request) {
 	registrationID := strings.TrimSpace(r.PathValue("id"))
 	if registrationID == "" {
@@ -82,7 +86,9 @@ func (h *Handler) DashboardHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("air quality fetch error for reg %s: %v", registrationID, err)
 	}
 
-	//TODO add currency - List gjennom target og hent exchange rate - se Assignement 1?
+	if err := populateExchangeRateFeature(&resp, reg, country); err != nil {
+		log.Printf("exchange rate fetch failed for reg %s: %v", registrationID, err)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -91,31 +97,9 @@ func (h *Handler) DashboardHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// TODO flytt til utils hør me gruppe?
-func writeJSONError(w http.ResponseWriter, status int, msg string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{
-		"error": msg,
-	})
-}
-
-func closeBody(body io.ReadCloser) {
-	if err := body.Close(); err != nil {
-		log.Printf("error closing body: %v", err)
-	}
-}
-
-func newDashboardResponse(country utility.RestCountryInfo) utility.DashboardResponse {
-	return utility.DashboardResponse{
-		Country:       country.Name.Common,
-		ISOCode:       country.ISOCode,
-		Features:      utility.DashboardFeatures{},
-		LastRetrieval: time.Now().Format("20060102 15:04"),
-	}
-}
-
-func populateCountryFeatures(resp *utility.DashboardResponse, reg utility.StoredRegistration, country utility.RestCountryInfo) {
+// populateCountryFeatures fills in country-related fields on the dashboard response
+// based on which features are enabled in the registration.
+func populateCountryFeatures(resp *utility.DashboardResponse, reg utility.StoredRegistration, country utility.RestCountryResponse) {
 	lat := country.Latlng[0]
 	lng := country.Latlng[1]
 
@@ -142,6 +126,8 @@ func populateCountryFeatures(resp *utility.DashboardResponse, reg utility.Stored
 	}
 }
 
+// populateWeatherFeatures fetches weather data and populates temperature and/or
+// precipitation on the dashboard response, if those features are enabled in the registration.
 func populateWeatherFeatures(resp *utility.DashboardResponse, reg utility.StoredRegistration, lat, lng float64) error {
 	if !reg.Features.Temperature && !reg.Features.Precipitation {
 		return nil
@@ -165,7 +151,10 @@ func populateWeatherFeatures(resp *utility.DashboardResponse, reg utility.Stored
 	return nil
 }
 
-func populateAirQualityFeature(resp *utility.DashboardResponse, reg utility.StoredRegistration, country utility.RestCountryInfo) error {
+// populateAirQualityFeature fetches air quality data for the country's capital and
+// populates PM2.5, PM10, and an air quality level string on the dashboard response.
+// Sets all values to -1 with level "unknown" if no capital is available.
+func populateAirQualityFeature(resp *utility.DashboardResponse, reg utility.StoredRegistration, country utility.RestCountryResponse) error {
 	if !reg.Features.AirQuality {
 		return nil
 	}
@@ -192,41 +181,97 @@ func populateAirQualityFeature(resp *utility.DashboardResponse, reg utility.Stor
 	return nil
 }
 
-func meanValue(values []float64) float64 {
-	if len(values) == 0 {
-		return 0
+// populateExchangeRateFeature fetches exchange rates for the target currencies specified
+// in the registration, using the country's own currency as the base rate.
+// Skips fetching entirely if no target currencies are registered.
+func populateExchangeRateFeature(resp *utility.DashboardResponse, reg utility.StoredRegistration, country utility.RestCountryResponse) error {
+	if len(reg.Features.TargetCurrencies) == 0 {
+		return nil
 	}
 
-	var sum float64
-	for _, v := range values {
-		sum += v
+	var baseCurrency string
+	for code := range country.Currencies {
+		baseCurrency = code
+		break
 	}
-	return sum / float64(len(values))
+
+	currency, err := fetchExchangeRate(reg.Features.TargetCurrencies, baseCurrency)
+	if err != nil {
+		return err
+	}
+
+	resp.Features.TargetCurrencies = currency
+	return nil
 }
 
-func fetchCountryInfo(isoCode string) (utility.RestCountryInfo, error) {
-	resp, err := http.Get(utility.RestCountriesApiUrl + isoCode)
+// fetchExchangeRate fetches exchange rates for the given target currencies,
+// relative to the base currency curr. Returns a map of currency code to rate,
+// or nil if no target currencies are specified.
+func fetchExchangeRate(targetCur []string, cur string) (map[string]float64, error) {
+	if len(targetCur) == 0 {
+		return nil, nil
+	}
+	if cur == "" {
+		return nil, fmt.Errorf("base currency is empty")
+	}
+
+	curApiURL := strings.NewReplacer(
+		"{cur}", strings.ToUpper(cur),
+	).Replace(utility.CurrencyAPIURL)
+
+	resp, err := http.Get(curApiURL)
 	if err != nil {
-		return utility.RestCountryInfo{}, fmt.Errorf("fetching country: %w", err)
+		return nil, fmt.Errorf("fetching exchange rates: %w", err)
 	}
 	defer closeBody(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return utility.RestCountryInfo{}, fmt.Errorf("countries api returned %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("exchange rate api returned %d: %s", resp.StatusCode, string(body))
 	}
 
-	var results []utility.RestCountryInfo
+	var exchangeRate utility.ExchangeRateResponse
+	if err := json.NewDecoder(resp.Body).Decode(&exchangeRate); err != nil {
+		return nil, fmt.Errorf("decoding exchange rates: %w", err)
+	}
+
+	result := make(map[string]float64)
+	for _, cur := range targetCur {
+		if rate, ok := exchangeRate.Rates[strings.ToUpper(cur)]; ok {
+			result[strings.ToUpper(cur)] = rate
+		}
+	}
+
+	return result, nil
+}
+
+// fetchCountryInfo fetches country data from the REST Countries API using the given ISO code.
+// Returns the first result, or an error if the request fails or no country is found.
+func fetchCountryInfo(isoCode string) (utility.RestCountryResponse, error) {
+	resp, err := http.Get(utility.RestCountriesApiUrl + isoCode)
+	if err != nil {
+		return utility.RestCountryResponse{}, fmt.Errorf("fetching country: %w", err)
+	}
+	defer closeBody(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return utility.RestCountryResponse{}, fmt.Errorf("countries api returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	var results []utility.RestCountryResponse
 	if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
-		return utility.RestCountryInfo{}, fmt.Errorf("decoding country: %w", err)
+		return utility.RestCountryResponse{}, fmt.Errorf("decoding country: %w", err)
 	}
 	if len(results) == 0 {
-		return utility.RestCountryInfo{}, fmt.Errorf("no country found for code %s", isoCode)
+		return utility.RestCountryResponse{}, fmt.Errorf("no country found for code %s", isoCode)
 	}
 	return results[0], nil
 }
 
-func fetchWeatherInfo(lat, lng float64) (utility.OpenMeteoInfo, error) {
+// fetchWeatherInfo fetches weather data from the Open-Meteo API
+// for the given latitude and longitude coordinates.
+func fetchWeatherInfo(lat, lng float64) (utility.OpenMeteoResponse, error) {
 	meteoURL := strings.NewReplacer(
 		"{lat}", strconv.FormatFloat(lat, 'f', 6, 64),
 		"{lng}", strconv.FormatFloat(lng, 'f', 6, 64),
@@ -234,22 +279,25 @@ func fetchWeatherInfo(lat, lng float64) (utility.OpenMeteoInfo, error) {
 
 	resp, err := http.Get(meteoURL)
 	if err != nil {
-		return utility.OpenMeteoInfo{}, fmt.Errorf("fetching weather: %w", err)
+		return utility.OpenMeteoResponse{}, fmt.Errorf("fetching weather: %w", err)
 	}
 	defer closeBody(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return utility.OpenMeteoInfo{}, fmt.Errorf("weather api returned %d: %s", resp.StatusCode, string(body))
+		return utility.OpenMeteoResponse{}, fmt.Errorf("weather api returned %d: %s", resp.StatusCode, string(body))
 	}
 
-	var info utility.OpenMeteoInfo
+	var info utility.OpenMeteoResponse
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
-		return utility.OpenMeteoInfo{}, fmt.Errorf("decoding weather: %w", err)
+		return utility.OpenMeteoResponse{}, fmt.Errorf("decoding weather: %w", err)
 	}
 	return info, nil
 }
 
+// fetchAirQualityInfo fetches PM10 and PM25 air quality averages for a country's capital.
+// It first resolves the capital's coordinates via OSM, then queries OpenAQ for nearby sensors.
+// Returns -1 for both values if data is unavailable.
 func fetchAirQualityInfo(isoCode, cap string) (pm10, pm25 float64, err error) {
 	if OpenAQAPIKey == "" {
 		return -1, -1, fmt.Errorf("missing OPENAQ_API_KEY")
@@ -273,6 +321,8 @@ func fetchAirQualityInfo(isoCode, cap string) (pm10, pm25 float64, err error) {
 	return calculatePMAverages(aq)
 }
 
+// fetchCapitalCoordinates looks up the latitude and longitude of a capital city
+// using the OpenStreetMap Nominatim API, filtered by ISO country code.
 func fetchCapitalCoordinates(isoCode, city string) (lat, lng float64, err error) {
 	osmURL := strings.NewReplacer(
 		"{cap}", city,
@@ -307,6 +357,8 @@ func fetchCapitalCoordinates(isoCode, city string) (lat, lng float64, err error)
 	return osmResults[0].CapLat, osmResults[0].CapLng, nil
 }
 
+// fetchOpenAQLocations queries the OpenAQ API for air quality monitoring locations
+// near the given coordinates within the specified country.
 func fetchOpenAQLocations(isoCode string, lat, lng float64) (utility.OpenAQResponse, error) {
 	openAQURL := strings.NewReplacer(
 		"{lat}", strconv.FormatFloat(lat, 'f', 6, 64),
@@ -339,6 +391,52 @@ func fetchOpenAQLocations(isoCode string, lat, lng float64) (utility.OpenAQRespo
 	return aq, nil
 }
 
+// fetchLatestPMValues fetches the latest sensor readings for a given OpenAQ location
+// and returns the most recent PM10 and PM25 values by matching against the provided sensor IDs.
+// Returns -1 for any value whose sensor ID is not found in the response.
+func fetchLatestPMValues(locationID, pm10SensorID, pm25SensorID int) (pm10, pm25 float64, err error) {
+	latestURL := strings.NewReplacer(
+		"{id}", strconv.Itoa(locationID),
+	).Replace(utility.OpenAQLatestURL)
+
+	req, err := http.NewRequest(http.MethodGet, latestURL, nil)
+	if err != nil {
+		return -1, -1, fmt.Errorf("creating OpenAQ latest request: %w", err)
+	}
+	req.Header.Set("X-API-Key", OpenAQAPIKey)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return -1, -1, fmt.Errorf("fetching OpenAQ latest: %w", err)
+	}
+	defer closeBody(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return -1, -1, fmt.Errorf("OpenAQ latest returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	var latest utility.OpenAQLatestResponse
+	if err := json.NewDecoder(resp.Body).Decode(&latest); err != nil {
+		return -1, -1, fmt.Errorf("decoding OpenAQ latest: %w", err)
+	}
+
+	pm10, pm25 = -1, -1
+	for _, result := range latest.Results {
+		switch result.SensorsID {
+		case pm10SensorID:
+			pm10 = result.Value
+		case pm25SensorID:
+			pm25 = result.Value
+		}
+	}
+
+	return pm10, pm25, nil
+}
+
+// calculatePMAverages iterates over up to 5 OpenAQ locations, fetches their latest
+// PM10 and PM25 sensor readings, and returns the mean of each across all locations.
+// Returns -1 for either value if no valid readings are found.
 func calculatePMAverages(aq utility.OpenAQResponse) (pm10, pm25 float64, err error) {
 	if len(aq.Results) == 0 {
 		return -1, -1, nil
@@ -384,6 +482,8 @@ func calculatePMAverages(aq utility.OpenAQResponse) (pm10, pm25 float64, err err
 	return pm10, pm25, nil
 }
 
+// calculateAQMean returns the mean of a slice of air quality values.
+// Returns -1 if the slice is empty, distinguishing "no data" from a zero reading.
 func calculateAQMean(values []float64) float64 {
 	if len(values) == 0 {
 		return -1
@@ -391,46 +491,9 @@ func calculateAQMean(values []float64) float64 {
 	return meanValue(values)
 }
 
-func fetchLatestPMValues(locationID, pm10SensorID, pm25SensorID int) (pm10, pm25 float64, err error) {
-	latestURL := strings.NewReplacer(
-		"{id}", strconv.Itoa(locationID),
-	).Replace(utility.OpenAQLatestURL)
-
-	req, err := http.NewRequest(http.MethodGet, latestURL, nil)
-	if err != nil {
-		return -1, -1, fmt.Errorf("creating OpenAQ latest request: %w", err)
-	}
-	req.Header.Set("X-API-Key", OpenAQAPIKey)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return -1, -1, fmt.Errorf("fetching OpenAQ latest: %w", err)
-	}
-	defer closeBody(resp.Body)
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return -1, -1, fmt.Errorf("OpenAQ latest returned %d: %s", resp.StatusCode, string(body))
-	}
-
-	var latest utility.OpenAQLatestResponse
-	if err := json.NewDecoder(resp.Body).Decode(&latest); err != nil {
-		return -1, -1, fmt.Errorf("decoding OpenAQ latest: %w", err)
-	}
-
-	pm10, pm25 = -1, -1
-	for _, result := range latest.Results {
-		switch result.SensorsID {
-		case pm10SensorID:
-			pm10 = result.Value
-		case pm25SensorID:
-			pm25 = result.Value
-		}
-	}
-
-	return pm10, pm25, nil
-}
-
+// airQualityLevel maps a PM2.5 concentration (µg/m³) to a human-readable air quality
+// category based on the US EPA AQI breakpoints.
+// Returns "unknown" if pm25 is negative.
 func airQualityLevel(pm25 float64) string {
 	if pm25 < 0 {
 		return "unknown"
@@ -449,5 +512,48 @@ func airQualityLevel(pm25 float64) string {
 		return "Very Unhealthy"
 	default:
 		return "Hazardous"
+	}
+}
+
+// meanValue calculates the arithmetic mean of a slice of float64 values.
+// Returns 0 if the slice is empty.
+func meanValue(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+
+	var sum float64
+	for _, v := range values {
+		sum += v
+	}
+	return sum / float64(len(values))
+}
+
+// writeJSONError writes a JSON-encoded error response with the given HTTP status code
+// and message to the response writer.
+func writeJSONError(w http.ResponseWriter, status int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"error": msg,
+	})
+}
+
+// closeBody closes an HTTP response body and logs any error that occurs.
+// Intended for use in defer statements after HTTP requests.
+func closeBody(body io.ReadCloser) {
+	if err := body.Close(); err != nil {
+		log.Printf("error closing body: %v", err)
+	}
+}
+
+// newDashboardResponse creates a new DashboardResponse initialised with the country
+// name, ISO code, and the current time as the last retrieval timestamp.
+func newDashboardResponse(country utility.RestCountryResponse) utility.DashboardResponse {
+	return utility.DashboardResponse{
+		Country:       country.Name.Common,
+		ISOCode:       country.ISOCode,
+		Features:      utility.DashboardFeatures{},
+		LastRetrieval: time.Now().Format("20060102 15:04"),
 	}
 }
