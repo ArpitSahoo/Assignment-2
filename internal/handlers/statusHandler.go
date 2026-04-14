@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"assignment-2/cmd/utility/consts"
-	"assignment-2/cmd/utility/structs"
+	"assignment-2/internal/utility"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -40,7 +40,7 @@ func handleGetStatus(w http.ResponseWriter, r *http.Request) {
 	results := getAPIStatuses()
 	uptimeSeconds := int(time.Since(startTime).Seconds())
 
-	resp := structs.StatusResponse{
+	resp := utility.StatusResponse{
 		RestCountriesAPI: results["restCountries"],
 		MeteoAPI:         results["meteo"],
 		OpenAQ:           results["openAQ"],
@@ -104,7 +104,7 @@ func checkAPIStatus(url string) int {
 
 // jsonWriter is a helper function that takes an http.ResponseWriter and StatusResponse,
 // sets the Content-Type header to application/json, and encodes the data as JSON to the response.
-func jsonWriter(w http.ResponseWriter, resp structs.StatusResponse) {
+func jsonWriter(w http.ResponseWriter, resp utility.StatusResponse) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	err := json.NewEncoder(w).Encode(resp)
 	if err != nil {

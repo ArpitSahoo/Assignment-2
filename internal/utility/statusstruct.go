@@ -1,4 +1,4 @@
-package structs
+package utility
 
 // StatusResponse represents the status.
 type StatusResponse struct {
