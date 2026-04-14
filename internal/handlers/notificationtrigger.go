@@ -27,7 +27,7 @@ func (h *Handler) triggerLifecycleWebhooks(ctx context.Context, event string, co
 			continue
 		}
 
-		if !matchesCountry(webhook, country) {
+		if matchesCountry(webhook, country) {
 			continue
 		}
 
