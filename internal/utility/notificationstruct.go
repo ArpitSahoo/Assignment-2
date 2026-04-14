@@ -16,9 +16,11 @@ type WebhookResponse struct {
 
 // Threshold represents the threshold condition for triggering a webhook notification.
 type Threshold struct {
-	Field    string  `json:"field"`
-	Operator string  `json:"operator"`
-	Value    float64 `json:"value"`
+	Field         string  `json:"field"`
+	Operator      string  `json:"operator"`
+	UpperOperator string  `json:"upperOperator,omitempty"`
+	UpperValue    float64 `json:"upperValue,omitempty"`
+	Value         float64 `json:"value"`
 }
 
 // WebhookInvocationPayload represents the JSON body sent when a lifecycle webhook is triggered.
@@ -36,5 +38,7 @@ type ThresholdDetails struct {
 	Field         string  `json:"field"`
 	Operator      string  `json:"operator"`
 	Threshold     float64 `json:"threshold"`
+	UpperOperator string  `json:"upperOperator,omitempty"`
+	UpperValue    float64 `json:"upperValue,omitempty"`
 	MeasuredValue float64 `json:"measuredValue"`
 }
