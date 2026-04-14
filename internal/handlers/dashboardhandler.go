@@ -90,6 +90,9 @@ func (h *Handler) DashboardHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("exchange rate fetch failed for reg %s: %v", registrationID, err)
 	}
 
+	h.triggerLifecycleWebhooks(ctx, "INVOKE", reg.IsoCode)
+	h.triggerThresholdWebhooks(ctx, reg.IsoCode, resp)
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
