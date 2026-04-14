@@ -56,39 +56,7 @@ func TestAPIKeyMiddleware_TableDrivenPositive(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			// set validate hook if provided; otherwise default to original behavior (should not be called)
-			if tc.validateFn != nil {
-				handlers.ValidateAPIKeyImpl = func(h *handlers.Handler, r *http.Request, rawKey string) (bool, error) {
-					return tc.validateFn(h, r, rawKey)
-				}
-			} else {
-				handlers.ValidateAPIKeyImpl = func(h *handlers.Handler, r *http.Request, rawKey string) (bool, error) {
-					// default: return false to catch unexpected calls
-					return false, nil
-				}
-			}
-
-			mw := APIKeyMiddleware(h)
-			// next handler writes OK so we can detect middleware pass-through
-			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-				_, _ = w.Write([]byte("next"))
-			})
-			handler := mw(next)
-
-			req := httptest.NewRequest(tc.method, tc.path, bytes.NewBuffer(nil))
-			if tc.headerKey != "" {
-				req.Header.Set(tc.headerKey, tc.headerValue)
-			}
-
-			rr := httptest.NewRecorder()
-			handler.ServeHTTP(rr, req)
-
-			assert.Equal(t, tc.wantStatus, rr.Code, "body=%s", rr.Body.String())
-		})
-	}
+	runApiMiddlewareTest(t, tests, h)
 }
 
 func TestAPIKeyMiddleware_TableDrivenNegative(t *testing.T) {
@@ -137,6 +105,18 @@ func TestAPIKeyMiddleware_TableDrivenNegative(t *testing.T) {
 		},
 	}
 
+	runApiMiddlewareTest(t, tests, h)
+}
+
+func runApiMiddlewareTest(t *testing.T, tests []struct {
+	name        string
+	path        string
+	method      string
+	headerKey   string
+	headerValue string
+	validateFn  func(h *handlers.Handler, r *http.Request, rawKey string) (bool, error)
+	wantStatus  int
+}, h *handlers.Handler) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// set validate hook if provided; otherwise default to original behavior (should not be called)
