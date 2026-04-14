@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"cloud.google.com/go/firestore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -111,7 +110,7 @@ func (h *Handler) revokeAPIKey(w http.ResponseWriter, r *http.Request) {
 	hash := hashAPIKey(rawKey) // hash the raw API key to find the corresponding document in Firestore
 	ctx := firestoreContext(r)
 	ref := h.Client.Collection(utility.APIKeysCollection).Doc(hash) // get the document reference for the API key in Firestore
-	doc, err := ref.Get(ctx)
+	_, err := ref.Get(ctx)
 	if err != nil { // if there is an error retrieving the document, check if it's a Not Found error; if so, return a 404 Not Found error
 		if isNotFound(err) { // check if it's a Not Found error; if so, return a 404 Not Found error
 			http.Error(w, "API key not found", http.StatusNotFound)
@@ -121,28 +120,11 @@ func (h *Handler) revokeAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var existing utility.APIKeyDoc // create a variable to hold the existing API key document data
-	// decode the Firestore document data into the existing variable;
-	if err := doc.DataTo(&existing); err != nil { //if it fails, return a 500 Internal Server Error
+	if _, err := ref.Delete(ctx); err != nil {
 		http.Error(w, "failed to revoke API key", http.StatusInternalServerError)
 		return
 	}
-
-	if existing.Revoked { // if the API key is already revoked, return a 404 Not Found error
-		http.Error(w, "API key not found", http.StatusNotFound)
-		return
-	}
-
-	_, err = ref.Set(ctx, map[string]any{
-		"revoked":   true,             // if the API key is valid and not revoked,
-		"revokedAt": time.Now().UTC(), //update the document to set "revoked" to true and record the revocation time
-	}, firestore.MergeAll)
-
-	if err != nil { // if there is an error updating the document, return a 500 Internal Server Error
-		http.Error(w, "failed to revoke API key", http.StatusInternalServerError)
-		return
-	}
-
+	w.Header().Set(utility.ContentType, utility.ApplicationJSON)
 	w.WriteHeader(http.StatusNoContent)
 }
 
