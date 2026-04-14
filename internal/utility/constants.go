@@ -21,3 +21,15 @@ const CurrencyAPIURL = "https://api.exchangerate-api.com/v4/latest/{cur}"
 
 const ContentType = "Content-Type"
 const ApplicationJSON = "application/json"
+
+const (
+	TargetCurrency       = "target currency"
+	AddTargetCurrency    = "add target currency"
+	RemoveTargetCurrency = "remove target currency"
+)
+
+const (
+	IsoCodeLength      = 2
+	CurrencyCodeLength = 3
+)
+
