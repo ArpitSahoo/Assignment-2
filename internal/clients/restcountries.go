@@ -10,9 +10,11 @@ import (
 	"net/http"
 )
 
+var FetchCountryInfoFunc = fetchCountryInfo
+
 // FetchCountryInfo fetches country data from the REST Countries API using the given ISO code.
 // Returns the first result, or an error if the request fails or no country is found.
-func FetchCountryInfo(isoCode string) (models.RestCountryResponse, error) {
+func fetchCountryInfo(isoCode string) (models.RestCountryResponse, error) {
 	resp, err := http.Get(utility.RestCountriesApiUrl + isoCode)
 	if err != nil {
 		return models.RestCountryResponse{}, fmt.Errorf("fetching country: %w", err)
