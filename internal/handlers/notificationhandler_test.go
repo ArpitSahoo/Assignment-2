@@ -15,10 +15,10 @@ import (
 func newTestHandler(t *testing.T) *Handler {
 	t.Helper()
 
-	ClearFirestoreEmulator(t)
+	clearFirestoreEmulator(t)
 
 	return &Handler{
-		Client: NewTestFirestoreClient(t),
+		Client: newTestFirestoreClient(t),
 	}
 }
 
