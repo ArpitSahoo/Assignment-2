@@ -44,3 +44,23 @@ const (
 	IsoCodeLength      = 2
 	CurrencyCodeLength = 3
 )
+
+const (
+	MinCountryCoordinates = 2
+
+	UnknownAirQualityValue = -1
+
+	Pm25GoodMax            = 12.0
+	Pm25ModerateMax        = 35.4
+	Pm25SensitiveGroupsMax = 55.4
+	Pm25UnhealthyMax       = 150.4
+	Pm25VeryUnhealthyMax   = 250.4
+
+	AirQualityUnknown         = "unknown"
+	AirQualityGood            = "Good"
+	AirQualityModerate        = "Moderate"
+	AirQualitySensitiveGroups = "Unhealthy for Sensitive Groups"
+	AirQualityUnhealthy       = "Unhealthy"
+	AirQualityVeryUnhealthy   = "Very Unhealthy"
+	AirQualityHazardous       = "Hazardous"
+)
