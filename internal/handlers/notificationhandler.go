@@ -6,20 +6,11 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"sync/atomic"
-
-	"cloud.google.com/go/firestore"
 )
-
-// HandlerWebhooks holding shared dependencies and local registration counter.
-type HandlerWebhooks struct {
-	Client       *firestore.Client
-	WebhookCount atomic.Int64
-}
 
 // WebhookHandler handles requests to the /notifications endpoint,
 // allowing clients to register new webhooks and retrieve all registered webhooks.
-func (h *HandlerWebhooks) WebhookHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
 		h.registerWebhook(w, r)
@@ -32,7 +23,7 @@ func (h *HandlerWebhooks) WebhookHandler(w http.ResponseWriter, r *http.Request)
 
 // WebhookIDHandler handles requests to the /notifications/{id} endpoint,
 // allowing clients to retrieve or delete a specific webhook by its ID.
-func (h *HandlerWebhooks) WebhookIDHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) WebhookIDHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	switch r.Method {
@@ -47,7 +38,7 @@ func (h *HandlerWebhooks) WebhookIDHandler(w http.ResponseWriter, r *http.Reques
 
 // registerWebhook processes POST requests to create a new webhook.
 // It validates the input, stores the webhook in Firestore, and returns the ID of the created webhook in the response.
-func (h *HandlerWebhooks) registerWebhook(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) registerWebhook(w http.ResponseWriter, r *http.Request) {
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
@@ -92,9 +83,10 @@ func (h *HandlerWebhooks) registerWebhook(w http.ResponseWriter, r *http.Request
 
 }
 
-// validateWebhook checks the validity of the webhook registration request.
-// It ensures that the URL is provided, the event type is valid, and that threshold conditions are correctly specified for THRESHOLD events.
-// If any validation fails, it sends an appropriate error response and returns true. If all validations pass, it returns false.
+// validateWebhook checks the validity of a webhook registration request.
+// It ensures the URL is provided and the event type is valid.
+// For THRESHOLD events, delegates threshold validation to validateThreshold.
+// Returns true if validation fails, false if all checks pass.
 func validateWebhook(w http.ResponseWriter, webhook utility.RegisterWebhook) bool {
 	if webhook.Url == "" {
 		log.Println("Webhook URL is required")
@@ -121,38 +113,55 @@ func validateWebhook(w http.ResponseWriter, webhook utility.RegisterWebhook) boo
 	}
 
 	if webhook.Event == "THRESHOLD" {
-		if webhook.Threshold == nil {
-			log.Println("Error threshold block is required for THRESHOLD event")
-			http.Error(w, "Error threshold block is required for THRESHOLD event",
-				http.StatusBadRequest)
-			return true
-		}
+		return validateThreshold(w, webhook.Threshold)
+	}
 
-		validFields := map[string]bool{
-			"pm25": true, "pm10": true,
-			"temperature": true, "precipitation": true,
-		}
-		if !validFields[webhook.Threshold.Field] {
-			log.Println("Error threshold field must be: pm25, pm10, temperature, or precipitation")
-			http.Error(w, "error threshold field must be: pm25, pm10, temperature, or precipitation",
-				http.StatusBadRequest)
-			return true
-		}
+	return false
+}
 
-		validOperators := map[string]bool{">": true, "<": true}
-		if !validOperators[webhook.Threshold.Operator] {
-			log.Println("Error threshold operator must be > or <")
-			http.Error(w, "error: threshold.operator must be > or <",
+// validateThreshold validates the threshold block of a webhook registration request.
+// Returns true if validation fails, false if it passes.
+func validateThreshold(w http.ResponseWriter, threshold *utility.Threshold) bool {
+	if threshold == nil {
+		log.Println("Error threshold block is required for THRESHOLD event")
+		http.Error(w, "Error threshold block is required for THRESHOLD event", http.StatusBadRequest)
+		return true
+	}
+
+	validFields := map[string]bool{
+		"pm25": true, "pm10": true,
+		"temperature": true, "precipitation": true,
+	}
+	if !validFields[threshold.Field] {
+		log.Println("Error threshold field must be: pm25, pm10, temperature, or precipitation")
+		http.Error(w, "error threshold field must be: pm25, pm10, temperature, or precipitation",
+			http.StatusBadRequest)
+		return true
+	}
+
+	validOperators := map[string]bool{">": true, "<": true, ">=": true, "<=": true, "=": true}
+	if !validOperators[threshold.Operator] {
+		log.Println("Error threshold operator must be >, <, >=, <= or =")
+		http.Error(w, "error: threshold.operator must be >, <, >=, <= or =",
+			http.StatusBadRequest)
+		return true
+	}
+
+	if threshold.UpperOperator != "" {
+		if !validOperators[threshold.UpperOperator] {
+			log.Println("Error threshold upperOperator must be >, <, >=, <= or =")
+			http.Error(w, "error: threshold.upperOperator must be >, <, >=, <= or =",
 				http.StatusBadRequest)
 			return true
 		}
 	}
+
 	return false
 }
 
 // getAllWebhooks retrieves all registered webhooks from Firestore and returns them as a JSON array in the response.
 // If there is an error during retrieval, it returns an appropriate error response and logs it.
-func (h *HandlerWebhooks) getAllWebhooks(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) getAllWebhooks(w http.ResponseWriter, r *http.Request) {
 	docs, err := h.Client.Collection(utility.WebhooksCollection).Documents(r.Context()).GetAll()
 	if err != nil {
 		log.Printf("Error retrieving webhooks: %v", err)
@@ -183,7 +192,7 @@ func (h *HandlerWebhooks) getAllWebhooks(w http.ResponseWriter, r *http.Request)
 
 // getWebhookByID retrieves a specific webhook by its ID from Firestore and returns it as a JSON object in the response.
 // If the webhook is not found or if there is an error during retrieval, it returns an appropriate error response and logs it.
-func (h *HandlerWebhooks) getWebhookByID(w http.ResponseWriter, r *http.Request, id string) {
+func (h *Handler) getWebhookByID(w http.ResponseWriter, r *http.Request, id string) {
 	doc, err := h.Client.Collection(utility.WebhooksCollection).Doc(id).Get(r.Context())
 	if err != nil {
 		log.Printf("Error retrieving webhook with ID %s: %v", id, err)
@@ -211,7 +220,7 @@ func (h *HandlerWebhooks) getWebhookByID(w http.ResponseWriter, r *http.Request,
 // deleteWebhook removes a specific webhook by its ID from Firestore.
 // It first checks if the webhook exists, and if it does, it deletes it and returns a 204 No Content status.
 // If the webhook is not found or if there is an error during deletion, it returns an appropriate error response and logs it.
-func (h *HandlerWebhooks) deleteWebhook(w http.ResponseWriter, r *http.Request, id string) {
+func (h *Handler) deleteWebhook(w http.ResponseWriter, r *http.Request, id string) {
 	_, err := h.Client.Collection(utility.WebhooksCollection).Doc(id).Get(r.Context())
 	if err != nil {
 		log.Println("Webhook with ID " + id + " not found")
