@@ -34,7 +34,6 @@ const CurrencyProbe = "http://129.241.150.113:9090/currency/NOK/"
 const MeteoProbe = "https://api.open-meteo.com/v1/forecast?latitude=0&longitude=0&current=temperature_2m"
 const OpenAQProbe = "https://api.openaq.org/v3/parameters/2"
 const NominatimProbe = "https://nominatim.openstreetmap.org/status.php?format=json"
->>>>>>> internal/utility/constants.go
 
 const (
 	TargetCurrency       = "target currency"
