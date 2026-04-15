@@ -1886,7 +1886,12 @@ func TestGetRegistrationByID_Success(t *testing.T) {
 
 	client, err := firestore.NewClient(ctx, "test-project")
 	require.NoError(t, err)
-	defer client.Close()
+	defer func(client *firestore.Client) {
+		err := client.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}(client)
 
 	// Seed document
 	docRef, _, err := client.Collection(utility.RegistrationsCollection).Add(ctx, map[string]any{
@@ -1913,7 +1918,12 @@ func TestGetRegistrationByID_Success(t *testing.T) {
 	h.GetRegistrationByID(w, req, docRef.ID)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -1933,7 +1943,12 @@ func TestGetRegistrationByID_NotFound(t *testing.T) {
 
 	client, err := firestore.NewClient(ctx, "test-project")
 	require.NoError(t, err)
-	defer client.Close()
+	defer func(client *firestore.Client) {
+		err := client.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}(client)
 
 	h := &Handler{Client: client}
 
@@ -1948,7 +1963,12 @@ func TestGetRegistrationByID_NotFound(t *testing.T) {
 	h.GetRegistrationByID(w, req, "nonexistent")
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
 
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
