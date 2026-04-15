@@ -188,7 +188,7 @@ func (h *Handler) GetAllRegistrations(w http.ResponseWriter, r *http.Request) {
 
 		var reg utility.StoredRegistration
 		if err := doc.DataTo(&reg); err != nil {
-			http.Error(w, "Error parsing data", http.StatusInternalServerError)
+			http.Error(w, "Failed to decode the registration document", http.StatusInternalServerError)
 			log.Printf("Failed to decode document: %v", err)
 			return
 		}
@@ -240,14 +240,14 @@ func (h *Handler) GetRegistrationByID(w http.ResponseWriter, r *http.Request, do
 
 	doc, err := h.Client.Collection(utility.RegistrationsCollection).Doc(docID).Get(ctx)
 	if err != nil {
-		http.Error(w, "Registration not found", http.StatusNotFound)
+		http.Error(w, "The document was not found", http.StatusNotFound)
 		log.Printf("Registration with ID %s not found: %v", docID, err)
 		return
 	}
 
 	var reg utility.StoredRegistration
 	if err := doc.DataTo(&reg); err != nil {
-		http.Error(w, "Failed to parse registration", http.StatusInternalServerError)
+		http.Error(w, "Failed to decode the registration document", http.StatusInternalServerError)
 		log.Printf("Failed to decode document: %v", err)
 		return
 	}
