@@ -6,13 +6,27 @@ import (
 	"assignment-2/internal/utility"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"cloud.google.com/go/firestore"
 )
+
+var fetchCountryInfoFunc = fetchCountryInfo
+var fetchWeatherInfoFunc = fetchWeatherInfo
+var fetchAirQualityInfoFunc = fetchAirQualityInfo
+var fetchExchangeRateFunc = fetchExchangeRate
+
+// OpenAQAPIKey is the API key for the OpenAQ air quality service,
+// loaded from the OPENAQ_API_KEY environment variable.
+var OpenAQAPIKey = os.Getenv("OPENAQ_API_KEY")
 
 // getRegistrationByID retrieves a stored registration from Firestore by its document ID.
 // Returns the populated StoredRegistration with its ID set, or an error if not found.
