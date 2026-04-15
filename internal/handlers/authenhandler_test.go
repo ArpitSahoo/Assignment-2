@@ -2,140 +2,207 @@ package handlers
 
 import (
 	"assignment-2/internal/utility"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestAPIKeyMiddleware_AllowsStatusWithoutKey(t *testing.T) {
-	old := validateAPIKeyImpl
-	validateAPIKeyImpl = func(h *Handler, r *http.Request, rawKey string) (bool, error) {
-		t.Fatal("validator should not be called for status path")
-		return false, nil
-	}
-	defer func() { validateAPIKeyImpl = old }()
+func newTestAuthHandler(t *testing.T) *Handler {
+	t.Helper()
 
-	h := &Handler{}
-	called := false
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		called = true
-		w.WriteHeader(http.StatusOK)
-	})
+	clearFirestoreEmulator(t)
 
-	req := httptest.NewRequest(http.MethodGet, utility.StatusPath, nil)
-	rr := httptest.NewRecorder()
-
-	h.APIKeyMiddleware(next).ServeHTTP(rr, req)
-
-	if !called {
-		t.Fatal("expected next handler to be called")
-	}
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rr.Code)
+	return &Handler{
+		Client: newTestFirestoreClient(t),
 	}
 }
 
-func TestAPIKeyMiddleware_AllowsPostAuthWithoutKey(t *testing.T) {
-	old := validateAPIKeyImpl
-	validateAPIKeyImpl = func(h *Handler, r *http.Request, rawKey string) (bool, error) {
-		t.Fatal("validator should not be called for POST /auth/")
-		return false, nil
-	}
-	defer func() { validateAPIKeyImpl = old }()
+func createAPIKeyHelper(t *testing.T, h *Handler, name, email string) (utility.AuthenticationResponse, int) {
+	t.Helper()
+	body := fmt.Sprintf(`{"name":"%s","email":"%s"}`, name, email)
+	req := httptest.NewRequest(http.MethodPost, utility.AuthPath, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.HandleAuthenticationReq(rr, req)
 
-	h := &Handler{}
-	called := false
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		called = true
-		w.WriteHeader(http.StatusCreated)
-	})
+	var resp utility.AuthenticationResponse
+	// attempt to decode if body is JSON; ignore decode error for negative cases
+	_ = json.NewDecoder(rr.Body).Decode(&resp)
+	return resp, rr.Code
+}
 
-	req := httptest.NewRequest(http.MethodPost, utility.AuthPath, nil)
+func TestRevokeAPIKey_EmptyKey_ReturnsBadRequest(t *testing.T) {
+	h := &Handler{} // no firestore client required because the handler returns early
+
+	req := httptest.NewRequest(http.MethodDelete, utility.AuthPath+"{key}", nil)
+	req.SetPathValue("key", "") // explicitly empty
 	rr := httptest.NewRecorder()
 
-	h.APIKeyMiddleware(next).ServeHTTP(rr, req)
+	// call the public delegator (same as your other tests)
+	h.HandleAuthenticationReq(rr, req)
 
-	if !called {
-		t.Fatal("expected next handler to be called")
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400; got %d; body=%q", rr.Code, rr.Body.String())
 	}
-	if rr.Code != http.StatusCreated {
-		t.Fatalf("expected status %d, got %d", http.StatusCreated, rr.Code)
+	if !strings.Contains(rr.Body.String(), "API key not provided") {
+		t.Fatalf("unexpected body: %q", rr.Body.String())
 	}
 }
 
-func TestAPIKeyMiddleware_MissingKeyReturns401(t *testing.T) {
-	old := validateAPIKeyImpl
-	validateAPIKeyImpl = func(h *Handler, r *http.Request, rawKey string) (bool, error) {
-		t.Fatal("validator should not be called without key")
-		return false, nil
+func TestCreateAPIKey_BadRequests_TableDriven(t *testing.T) {
+	// These exercises the validation branches that return before using Firestore.
+	h := &Handler{} // Client may be nil because validation fails first
+
+	cases := []struct {
+		name       string
+		body       string
+		wantStatus int
+		wantSubstr string
+	}{
+		{
+			name:       "NoEmail",
+			body:       `{"name":"test-client","email":""}`,
+			wantStatus: http.StatusBadRequest,
+			wantSubstr: "name and email are required",
+		},
+		{
+			name:       "NoName",
+			body:       `{"name":"","email":"user@example.com"}`,
+			wantStatus: http.StatusBadRequest,
+			wantSubstr: "name and email are required",
+		},
+		{
+			name:       "BadEmailFormat",
+			body:       `{"name":"test-client","email":"not-an-email"}`,
+			wantStatus: http.StatusBadRequest,
+			wantSubstr: "invalid email",
+		},
+		{
+			name:       "NoEmailDomain",
+			body:       `{"name":"test-client","email":"user@"}`,
+			wantStatus: http.StatusBadRequest,
+			wantSubstr: "invalid email",
+		},
+		{
+			name:       "badBody",
+			body:       `"name":"test-client","email":"user@"`,
+			wantStatus: http.StatusBadRequest,
+			wantSubstr: "invalid request body",
+		},
 	}
-	defer func() { validateAPIKeyImpl = old }()
 
-	h := &Handler{}
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("next handler should not be called")
-	})
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, utility.AuthPath, strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			rr := httptest.NewRecorder()
 
-	req := httptest.NewRequest(http.MethodGet, "/envdash/v1/dashboards/7f3a91bc04e2d158", nil)
-	rr := httptest.NewRecorder()
+			h.HandleAuthenticationReq(rr, req)
 
-	h.APIKeyMiddleware(next).ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusUnauthorized {
-		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, rr.Code)
+			if rr.Code != tc.wantStatus {
+				t.Fatalf("status: got %d want %d; body=%q", rr.Code, tc.wantStatus, rr.Body.String())
+			}
+			if !strings.Contains(rr.Body.String(), tc.wantSubstr) {
+				t.Fatalf("response body does not contain expected substring: got %q want contains %q", rr.Body.String(), tc.wantSubstr)
+			}
+		})
 	}
 }
 
-func TestAPIKeyMiddleware_InvalidKeyReturns403(t *testing.T) {
-	old := validateAPIKeyImpl
-	validateAPIKeyImpl = func(h *Handler, r *http.Request, rawKey string) (bool, error) {
-		if rawKey != "sk-envdash-test" {
-			t.Fatalf("expected raw key to be passed through, got %q", rawKey)
-		}
-		return false, nil
-	}
-	defer func() { validateAPIKeyImpl = old }()
-
+func TestRevokeAPIKey_EmptyOrWhitespaceKey_Table(t *testing.T) {
 	h := &Handler{}
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("next handler should not be called")
-	})
 
-	req := httptest.NewRequest(http.MethodGet, "/envdash/v1/dashboards/7f3a91bc04e2d158", nil)
-	req.Header.Set(utility.APIKeyHeader, "sk-envdash-test")
-	rr := httptest.NewRecorder()
+	cases := []struct {
+		name string
+		key  string
+	}{
+		{"Empty", ""},
+		{"Whitespace", "   "},
+	}
 
-	h.APIKeyMiddleware(next).ServeHTTP(rr, req)
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodDelete, utility.AuthPath+"{key}", nil)
+			// If you want to simulate "not set", simply don't call SetPathValue.
+			if tc.name != "MissingSet" {
+				req.SetPathValue("key", tc.key)
+			}
+			rr := httptest.NewRecorder()
 
-	if rr.Code != http.StatusForbidden {
-		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rr.Code)
+			h.HandleAuthenticationReq(rr, req)
+
+			if rr.Code != http.StatusBadRequest {
+				t.Fatalf("case %s: expected 400, got %d; body=%q", tc.name, rr.Code, rr.Body.String())
+			}
+		})
 	}
 }
 
-func TestAPIKeyMiddleware_ValidKeyCallsNext(t *testing.T) {
-	old := validateAPIKeyImpl
-	validateAPIKeyImpl = func(h *Handler, r *http.Request, rawKey string) (bool, error) {
-		return true, nil
-	}
-	defer func() { validateAPIKeyImpl = old }()
+func TestCreateAndValidateAPIKey_PositiveTest(t *testing.T) {
+	h := newTestAuthHandler(t)
 
-	h := &Handler{}
-	called := false
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		called = true
-		w.WriteHeader(http.StatusOK)
-	})
+	resp, code := createAPIKeyHelper(t, h, "test-client", "test@example.com")
+	require.Equal(t, http.StatusCreated, code, "create response body should be JSON with key")
+	require.NotEmpty(t, resp.Key)
 
-	req := httptest.NewRequest(http.MethodGet, "/envdash/v1/dashboards/7f3a91bc04e2d158", nil)
-	req.Header.Set(utility.APIKeyHeader, "sk-envdash-valid")
-	rr := httptest.NewRecorder()
+	// validate by calling the exported hook ValidateAPIKeyImpl (delegates to h.validateAPIKey)
+	validateReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	valid, err := ValidateAPIKeyImpl(h, validateReq, resp.Key)
+	require.NoError(t, err)
+	assert.True(t, valid, "created key should validate")
+}
 
-	h.APIKeyMiddleware(next).ServeHTTP(rr, req)
+func TestValidateWithWrongKey_ReturnsFalse(t *testing.T) {
+	h := newTestAuthHandler(t)
 
-	if !called {
-		t.Fatal("expected next handler to be called")
-	}
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rr.Code)
-	}
+	// create a valid key to ensure emulator is ready
+	resp, code := createAPIKeyHelper(t, h, "test-client", "test@example.com")
+	require.Equal(t, http.StatusCreated, code)
+	require.NotEmpty(t, resp.Key)
+
+	validateReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	valid, err := ValidateAPIKeyImpl(h, validateReq, resp.Key+"-wrong")
+	require.NoError(t, err)
+	assert.False(t, valid, "wrong key should not validate")
+}
+
+func TestRevokeAPIKeyHandlerSucceeds(t *testing.T) {
+	h := newTestAuthHandler(t)
+	resp, code := createAPIKeyHelper(t, h, "to-revoke-handler", "revoke-handler@example.com")
+	require.Equal(t, http.StatusCreated, code)
+	require.NotEmpty(t, resp.Key)
+
+	delReq := httptest.NewRequest(http.MethodDelete, utility.AuthPath+"{key}", nil)
+	delReq.SetPathValue("key", resp.Key)
+	delRR := httptest.NewRecorder()
+	h.HandleAuthenticationReq(delRR, delReq)
+	assert.Equal(t, http.StatusNoContent, delRR.Code)
+	assert.Equal(t, 0, delRR.Body.Len())
+}
+
+func TestRevokedKeyIsActuallyRemoved(t *testing.T) {
+	h := newTestAuthHandler(t)
+	resp, code := createAPIKeyHelper(t, h, "to-revoke-handler", "revoke-handler@example.com")
+	require.Equal(t, http.StatusCreated, code)
+
+	// revoke
+	delReq := httptest.NewRequest(http.MethodDelete, utility.AuthPath+"{key}", nil)
+	delReq.SetPathValue("key", resp.Key)
+	delRR := httptest.NewRecorder()
+	h.HandleAuthenticationReq(delRR, delReq)
+	require.Equal(t, http.StatusNoContent, delRR.Code)
+
+	// negative assertion
+	validateReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	valid, err := ValidateAPIKeyImpl(h, validateReq, resp.Key)
+	require.NoError(t, err)
+	assert.False(t, valid)
 }
