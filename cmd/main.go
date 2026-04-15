@@ -3,6 +3,7 @@ package main
 import (
 	"assignment-2/internal"
 	"assignment-2/internal/handlers"
+	"assignment-2/internal/middleware"
 	"assignment-2/internal/utility"
 	"log"
 	"net/http"
@@ -43,10 +44,15 @@ func main() {
 		Client: client,
 	}
 
+	router.HandleFunc(utility.AuthPath, handler.HandleAuthenticationReq)
+	router.HandleFunc(utility.AuthPathKey, handler.HandleAuthenticationReq)
 	router.HandleFunc(utility.RegistrationPath, handler.HandleRegReq)
 	router.HandleFunc(utility.RegistrationPathID, handler.HandleRegReq)
+
+	mw := middleware.APIKeyMiddleware(handler) // use handler as validator
+	protected := mw(router)
 	log.Printf("Firestore REST service listening on port %s with URL path /%s/ ...\n", port, utility.RegistrationPath)
-	if errSrv := http.ListenAndServe(addr, router); errSrv != nil {
+	if errSrv := http.ListenAndServe(addr, protected); errSrv != nil {
 		panic(errSrv)
 	}
 }

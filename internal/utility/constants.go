@@ -21,6 +21,12 @@ const CurrencyAPIURL = "https://api.exchangerate-api.com/v4/latest/{cur}"
 const ContentType = "Content-Type"
 const ApplicationJSON = "application/json"
 
+const APIKeysCollection = "apiKeys"
+const AuthPath = "/envdash/v1/auth/"
+const AuthPathKey = "/envdash/v1/auth/{key}"
+const APIKeyHeader = "Authorization"
+const BaseAPIKeyStarter = "sk-envdash-"
+
 const StatusPath = "/status/"
 const RestCountriesProbe = "http://129.241.150.113:8080/v3.1/alpha/NO"
 const CurrencyProbe = "http://129.241.150.113:9090/currency/NOK/"
