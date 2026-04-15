@@ -1,4 +1,4 @@
-package utility
+package models
 
 // MeanValue calculates the arithmetic mean of a slice of float64 values.
 // Returns 0 if the slice is empty
