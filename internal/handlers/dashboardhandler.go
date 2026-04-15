@@ -17,6 +17,11 @@ import (
 	"cloud.google.com/go/firestore"
 )
 
+var fetchCountryInfoFunc = fetchCountryInfo
+var fetchWeatherInfoFunc = fetchWeatherInfo
+var fetchAirQualityInfoFunc = fetchAirQualityInfo
+var fetchExchangeRateFunc = fetchExchangeRate
+
 // OpenAQAPIKey is the API key for the OpenAQ air quality service,
 // loaded from the OPENAQ_API_KEY environment variable.
 var OpenAQAPIKey = os.Getenv("OPENAQ_API_KEY")
@@ -62,7 +67,7 @@ func (h *Handler) DashboardHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	country, err := fetchCountryInfo(reg.IsoCode)
+	country, err := fetchCountryInfoFunc(reg.IsoCode)
 	if err != nil {
 		log.Printf("country fetch error for reg %s: %v", registrationID, err)
 		writeJSONError(w, http.StatusInternalServerError, "failed to fetch country information")
@@ -136,7 +141,7 @@ func populateWeatherFeatures(resp *utility.DashboardResponse, reg utility.Stored
 		return nil
 	}
 
-	weather, err := fetchWeatherInfo(lat, lng)
+	weather, err := fetchWeatherInfoFunc(lat, lng)
 	if err != nil {
 		return err
 	}
@@ -171,7 +176,7 @@ func populateAirQualityFeature(resp *utility.DashboardResponse, reg utility.Stor
 		return nil
 	}
 
-	pm10, pm25, err := fetchAirQualityInfo(country.ISOCode, country.Capital[0])
+	pm10, pm25, err := fetchAirQualityInfoFunc(country.ISOCode, country.Capital[0])
 	if err != nil {
 		return err
 	}
@@ -198,7 +203,7 @@ func populateExchangeRateFeature(resp *utility.DashboardResponse, reg utility.St
 		break
 	}
 
-	currency, err := fetchExchangeRate(reg.Features.TargetCurrencies, baseCurrency)
+	currency, err := fetchExchangeRateFunc(reg.Features.TargetCurrencies, baseCurrency)
 	if err != nil {
 		return err
 	}
