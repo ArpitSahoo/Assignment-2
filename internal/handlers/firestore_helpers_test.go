@@ -13,9 +13,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// NewTestFirestoreClient creates a new Firestore client for testing, configured to connect to the Firestore emulator
+// newTestFirestoreClient creates a new Firestore client for testing, configured to connect to the Firestore emulator
 // if the FIRESTORE_EMULATOR_HOST environment variable is set. If the variable is not set, the test will be skipped.
-func NewTestFirestoreClient(t *testing.T) *cloudfirestore.Client {
+func newTestFirestoreClient(t *testing.T) *cloudfirestore.Client {
 	t.Helper()
 
 	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
@@ -37,8 +37,8 @@ func NewTestFirestoreClient(t *testing.T) *cloudfirestore.Client {
 	return client
 }
 
-// ClearFirestoreEmulator sends a DELETE request to the Firestore emulator's REST API to clear all documents in the default database.
-func ClearFirestoreEmulator(t *testing.T) {
+// clearFirestoreEmulator sends a DELETE request to the Firestore emulator's REST API to clear all documents in the default database.
+func clearFirestoreEmulator(t *testing.T) {
 	t.Helper()
 
 	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")

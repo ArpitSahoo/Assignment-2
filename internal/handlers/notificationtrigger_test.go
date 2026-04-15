@@ -13,8 +13,8 @@ import (
 )
 
 func TestTriggerLifecycleWebhooks(t *testing.T) {
-	client := NewTestFirestoreClient(t)
-	ClearFirestoreEmulator(t)
+	client := newTestFirestoreClient(t)
+	clearFirestoreEmulator(t)
 
 	var received utility.WebhookInvocationPayload
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -38,8 +38,8 @@ func TestTriggerLifecycleWebhooks(t *testing.T) {
 }
 
 func TestTriggerThresholdWebhooks(t *testing.T) {
-	client := NewTestFirestoreClient(t)
-	ClearFirestoreEmulator(t)
+	client := newTestFirestoreClient(t)
+	clearFirestoreEmulator(t)
 
 	var received utility.WebhookInvocationPayload
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -76,8 +76,8 @@ func TestTriggerThresholdWebhooks(t *testing.T) {
 }
 
 func TestTriggerLifecycleWebhooksWrongEvent(t *testing.T) {
-	client := NewTestFirestoreClient(t)
-	ClearFirestoreEmulator(t)
+	client := newTestFirestoreClient(t)
+	clearFirestoreEmulator(t)
 
 	fired := false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -100,8 +100,8 @@ func TestTriggerLifecycleWebhooksWrongEvent(t *testing.T) {
 }
 
 func TestTriggerLifecycleWebhooksWrongCountry(t *testing.T) {
-	client := NewTestFirestoreClient(t)
-	ClearFirestoreEmulator(t)
+	client := newTestFirestoreClient(t)
+	clearFirestoreEmulator(t)
 
 	fired := false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -124,8 +124,8 @@ func TestTriggerLifecycleWebhooksWrongCountry(t *testing.T) {
 }
 
 func TestTriggerLifecycleWebhooksEmptyCountryFiresForAll(t *testing.T) {
-	client := NewTestFirestoreClient(t)
-	ClearFirestoreEmulator(t)
+	client := newTestFirestoreClient(t)
+	clearFirestoreEmulator(t)
 
 	var received utility.WebhookInvocationPayload
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -149,8 +149,8 @@ func TestTriggerLifecycleWebhooksEmptyCountryFiresForAll(t *testing.T) {
 }
 
 func TestTriggerThresholdWebhooksNegative(t *testing.T) {
-	client := NewTestFirestoreClient(t)
-	ClearFirestoreEmulator(t)
+	client := newTestFirestoreClient(t)
+	clearFirestoreEmulator(t)
 
 	fired := false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -185,8 +185,8 @@ func TestTriggerThresholdWebhooksNegative(t *testing.T) {
 }
 
 func TestTriggerThresholdWebhooksCompound(t *testing.T) {
-	client := NewTestFirestoreClient(t)
-	ClearFirestoreEmulator(t)
+	client := newTestFirestoreClient(t)
+	clearFirestoreEmulator(t)
 
 	var received utility.WebhookInvocationPayload
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

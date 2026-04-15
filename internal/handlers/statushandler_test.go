@@ -52,8 +52,8 @@ func TestCheckAPIStatus_SetsAPIKeyHeader(t *testing.T) {
 }
 
 func TestHandleStatus_FirestoreReachable(t *testing.T) {
-	client := NewTestFirestoreClient(t)
-	ClearFirestoreEmulator(t)
+	client := newTestFirestoreClient(t)
+	clearFirestoreEmulator(t)
 
 	h := &Handler{Client: client}
 
@@ -70,8 +70,8 @@ func TestHandleStatus_FirestoreReachable(t *testing.T) {
 }
 
 func TestHandleStatus_WebhookCount(t *testing.T) {
-	client := NewTestFirestoreClient(t)
-	ClearFirestoreEmulator(t)
+	client := newTestFirestoreClient(t)
+	clearFirestoreEmulator(t)
 
 	h := &Handler{Client: client}
 
@@ -88,7 +88,7 @@ func TestHandleStatus_WebhookCount(t *testing.T) {
 }
 
 func TestHandleStatus_WebhookCount_Error(t *testing.T) {
-	client := NewTestFirestoreClient(t)
+	client := newTestFirestoreClient(t)
 	err := client.Close()
 	if err != nil {
 		return
