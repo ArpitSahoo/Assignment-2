@@ -65,26 +65,6 @@ var getRegistrationByIDDocImpl = func(ctx context.Context, client *firestore.Cli
 	return doc.Data(), nil
 }
 
-// listRegistrationDocs retrieves all registration documents from Firestore and returns them as a slice of maps.
-// Defined as variable to allow for replacement in tests.
-var listRegistrationDocs = func(ctx context.Context, client *firestore.Client) ([]map[string]interface{}, error) {
-	iter := client.Collection(utility.RegistrationsCollection).Documents(ctx) // Creates an Iterator
-	defer iter.Stop()                                                         // Ensures it stops in at the end
-
-	var results []map[string]interface{}
-	for { // Document looping
-		doc, err := iter.Next()
-		if errors.Is(err, iterator.Done) { // stop when no more documents
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-		results = append(results, doc.Data()) // add document data in list
-	}
-	return results, nil
-}
-
 // HandleRegReq routes incoming HTTP requests to the appropriate handler method
 // based on the request method. Supports POST for adding registrations and GET
 // for retrieving registrations. Responds with 405 Method Not Allowed for unsupported methods.
@@ -185,18 +165,40 @@ func (h *Handler) handleAllGetRegistration(w http.ResponseWriter, r *http.Reques
 
 // GetAllRegistrations retrieves all registration documents from Firestore and returns them as a
 // JSON array in the response body. It iterates through all documents in the "registrations" collection,
-// collects their data into a slice of maps, and encodes the result as JSON.
-// If an error occurs during retrieval, it responds with a 500 Internal Server Error.
+// converts each document into a StoredRegistration struct, and encodes the result as JSON.
+// If an error occurs during retrieval or decoding, it responds with HTTP 500 Internal Server Error.
 func (h *Handler) GetAllRegistrations(w http.ResponseWriter, r *http.Request) {
 	ctx := firestoreContext(r)
 
-	results, err := listRegistrationDocs(ctx, h.Client)
-	if err != nil {
-		http.Error(w, "Error retrieving data", http.StatusInternalServerError)
-		log.Printf("Failed to list registration documents: %v", err)
-		return
+	iter := h.Client.Collection(utility.RegistrationsCollection).Documents(ctx)
+	defer iter.Stop()
+
+	var results []utility.StoredRegistration
+
+	for {
+		doc, err := iter.Next()
+		if errors.Is(err, iterator.Done) {
+			break
+		}
+		if err != nil {
+			http.Error(w, "Error retrieving data", http.StatusInternalServerError)
+			log.Printf("Failed to list registration documents: %v", err)
+			return
+		}
+
+		var reg utility.StoredRegistration
+		if err := doc.DataTo(&reg); err != nil {
+			http.Error(w, "Failed to decode the registration document", http.StatusInternalServerError)
+			log.Printf("Failed to decode document: %v", err)
+			return
+		}
+
+		reg.ID = doc.Ref.ID
+
+		results = append(results, reg)
 	}
 
+	w.Header().Set(utility.ContentType, utility.ApplicationJSON)
 	_ = json.NewEncoder(w).Encode(results)
 }
 
@@ -229,21 +231,31 @@ func (h *Handler) handleHead(w http.ResponseWriter, r *http.Request, docID strin
 	w.WriteHeader(http.StatusOK)
 }
 
-// GetRegistrationByID handles a GET request that retrieves registration data
-// for a specific country identified by its document ID. It goes through firebase
-// query and check if there is a similar Documents with that ID and returns the
-// matching documents as a JSON. if not it returns a status code of 404 not found.
+// GetRegistrationByID handles a GET request that retrieves a single registration
+// document by its Firestore document ID. If the document exists, it is returned
+// as JSON. If it does not exist or cannot be retrieved, the handler responds
+// with HTTP 404 Not Found.
 func (h *Handler) GetRegistrationByID(w http.ResponseWriter, r *http.Request, docID string) {
 	ctx := firestoreContext(r)
 
-	data, err := getRegistrationByIDDocImpl(ctx, h.Client, docID)
+	doc, err := h.Client.Collection(utility.RegistrationsCollection).Doc(docID).Get(ctx)
 	if err != nil {
-		http.Error(w, "Registration not found", http.StatusNotFound)
+		http.Error(w, "The document was not found", http.StatusNotFound)
 		log.Printf("Registration with ID %s not found: %v", docID, err)
 		return
 	}
 
-	_ = json.NewEncoder(w).Encode(data)
+	var reg utility.StoredRegistration
+	if err := doc.DataTo(&reg); err != nil {
+		http.Error(w, "Failed to decode the registration document", http.StatusInternalServerError)
+		log.Printf("Failed to decode document: %v", err)
+		return
+	}
+
+	reg.ID = doc.Ref.ID
+
+	w.Header().Set(utility.ContentType, utility.ApplicationJSON)
+	_ = json.NewEncoder(w).Encode(reg)
 }
 
 // replaceRegistration handles PUT requests to the /registrations/{id} endpoint.
