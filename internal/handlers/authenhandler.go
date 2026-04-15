@@ -17,6 +17,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// ValidateAPIKeyImpl is a public function that serves as a delegator to the private validateAPIKey
+// method of the Handler struct. It allows external packages to call the validation logic without exposing
+// the internal implementation details of the Handler struct.
+// This design promotes encapsulation while still providing necessary functionality to other parts of the application,
+// such as middleware that needs to validate API keys for incoming requests.
 var ValidateAPIKeyImpl = func(h *Handler, r *http.Request, rawKey string) (bool, error) {
 	return h.validateAPIKey(r, rawKey)
 }
