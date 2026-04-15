@@ -65,26 +65,6 @@ var getRegistrationByIDDocImpl = func(ctx context.Context, client *firestore.Cli
 	return doc.Data(), nil
 }
 
-// listRegistrationDocs retrieves all registration documents from Firestore and returns them as a slice of maps.
-// Defined as variable to allow for replacement in tests.
-var listRegistrationDocs = func(ctx context.Context, client *firestore.Client) ([]map[string]interface{}, error) {
-	iter := client.Collection(utility.RegistrationsCollection).Documents(ctx) // Creates an Iterator
-	defer iter.Stop()                                                         // Ensures it stops in at the end
-
-	var results []map[string]interface{}
-	for { // Document looping
-		doc, err := iter.Next()
-		if errors.Is(err, iterator.Done) { // stop when no more documents
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-		results = append(results, doc.Data()) // add document data in list
-	}
-	return results, nil
-}
-
 // HandleRegReq routes incoming HTTP requests to the appropriate handler method
 // based on the request method. Supports POST for adding registrations and GET
 // for retrieving registrations. Responds with 405 Method Not Allowed for unsupported methods.
