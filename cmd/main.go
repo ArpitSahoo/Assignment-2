@@ -48,6 +48,7 @@ func main() {
 	router.HandleFunc(utility.AuthPathKey, handler.HandleAuthenticationReq)
 	router.HandleFunc(utility.RegistrationPath, handler.HandleRegReq)
 	router.HandleFunc(utility.RegistrationPathID, handler.HandleRegReq)
+	router.HandleFunc(utility.StatusPath, handler.HandleStatus)
 
 	mw := middleware.APIKeyMiddleware(handler) // use handler as validator
 	protected := mw(router)
