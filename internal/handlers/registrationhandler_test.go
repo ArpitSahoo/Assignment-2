@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -1851,7 +1850,7 @@ func TestGetAllRegistrations(t *testing.T) {
 	defer func(client *firestore.Client) {
 		err := client.Close()
 		if err != nil {
-			log.Fatal(err)
+			t.Fatal(err)
 		}
 	}(client)
 
@@ -1889,7 +1888,7 @@ func TestGetRegistrationByID_Success(t *testing.T) {
 	defer func(client *firestore.Client) {
 		err := client.Close()
 		if err != nil {
-			log.Fatal(err)
+			t.Fatal(err)
 		}
 	}(client)
 
@@ -1946,7 +1945,7 @@ func TestGetRegistrationByID_NotFound(t *testing.T) {
 	defer func(client *firestore.Client) {
 		err := client.Close()
 		if err != nil {
-			log.Fatal(err)
+			t.Fatal(err)
 		}
 	}(client)
 
