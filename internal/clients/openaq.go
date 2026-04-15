@@ -173,22 +173,8 @@ func calculatePMAverages(aq models.OpenAQResponse) (pm10, pm25 float64, err erro
 		}
 	}
 
-	pm10 = calculateAQMean(pm10Values)
-	pm25 = calculateAQMean(pm25Values)
+	pm10 = utility.MeanValue(pm10Values)
+	pm25 = utility.MeanValue(pm25Values)
 
 	return pm10, pm25, nil
-}
-
-// calculateAQMean returns the mean of a slice of air quality values.
-// Returns -1 if the slice is empty, distinguishing "no data" from a zero reading.
-func calculateAQMean(values []float64) float64 {
-	if len(values) == 0 {
-		return -1
-	}
-
-	var sum float64
-	for _, v := range values {
-		sum += v
-	}
-	return sum / float64(len(values))
 }

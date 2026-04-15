@@ -135,12 +135,12 @@ func populateWeatherFeatures(resp *models.DashboardResponse, reg models.StoredRe
 	}
 
 	if reg.Features.Temperature {
-		temp := meanValue(weather.Hourly.Temperature2M)
+		temp := utility.MeanValue(weather.Hourly.Temperature2M)
 		resp.Features.Temperature = &temp
 	}
 
 	if reg.Features.Precipitation {
-		precipitation := meanValue(weather.Hourly.Precipitation)
+		precipitation := utility.MeanValue(weather.Hourly.Precipitation)
 		resp.Features.Precipitation = &precipitation
 	}
 
@@ -217,20 +217,6 @@ func airQualityLevel(pm25 float64) string {
 	default:
 		return "Hazardous"
 	}
-}
-
-// meanValue calculates the arithmetic mean of a slice of float64 values.
-// Returns 0 if the slice is empty.
-func meanValue(values []float64) float64 {
-	if len(values) == 0 {
-		return 0
-	}
-
-	var sum float64
-	for _, v := range values {
-		sum += v
-	}
-	return sum / float64(len(values))
 }
 
 // writeJSONError writes a JSON-encoded error response with the given HTTP status code
