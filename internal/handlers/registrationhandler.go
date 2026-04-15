@@ -185,8 +185,8 @@ func (h *Handler) handleAllGetRegistration(w http.ResponseWriter, r *http.Reques
 
 // GetAllRegistrations retrieves all registration documents from Firestore and returns them as a
 // JSON array in the response body. It iterates through all documents in the "registrations" collection,
-// collects their data into a slice of maps, and encodes the result as JSON.
-// If an error occurs during retrieval, it responds with a 500 Internal Server Error.
+// converts each document into a StoredRegistration struct, and encodes the result as JSON.
+// If an error occurs during retrieval or decoding, it responds with HTTP 500 Internal Server Error.
 func (h *Handler) GetAllRegistrations(w http.ResponseWriter, r *http.Request) {
 	ctx := firestoreContext(r)
 
@@ -251,10 +251,10 @@ func (h *Handler) handleHead(w http.ResponseWriter, r *http.Request, docID strin
 	w.WriteHeader(http.StatusOK)
 }
 
-// GetRegistrationByID handles a GET request that retrieves registration data
-// for a specific country identified by its document ID. It goes through firebase
-// query and check if there is a similar Documents with that ID and returns the
-// matching documents as a JSON. if not it returns a status code of 404 not found.
+// GetRegistrationByID handles a GET request that retrieves a single registration
+// document by its Firestore document ID. If the document exists, it is returned
+// as JSON. If it does not exist or cannot be retrieved, the handler responds
+// with HTTP 404 Not Found.
 func (h *Handler) GetRegistrationByID(w http.ResponseWriter, r *http.Request, docID string) {
 	ctx := firestoreContext(r)
 
