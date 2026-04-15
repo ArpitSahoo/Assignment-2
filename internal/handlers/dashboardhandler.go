@@ -6,27 +6,13 @@ import (
 	"assignment-2/internal/utility"
 	"context"
 	"encoding/json"
-	"fmt"
-	"io"
 	"log"
 	"net/http"
-	"net/url"
-	"os"
-	"strconv"
 	"strings"
 	"time"
 
 	"cloud.google.com/go/firestore"
 )
-
-var fetchCountryInfoFunc = fetchCountryInfo
-var fetchWeatherInfoFunc = fetchWeatherInfo
-var fetchAirQualityInfoFunc = fetchAirQualityInfo
-var fetchExchangeRateFunc = fetchExchangeRate
-
-// OpenAQAPIKey is the API key for the OpenAQ air quality service,
-// loaded from the OPENAQ_API_KEY environment variable.
-var OpenAQAPIKey = os.Getenv("OPENAQ_API_KEY")
 
 // getRegistrationByID retrieves a stored registration from Firestore by its document ID.
 // Returns the populated StoredRegistration with its ID set, or an error if not found.
@@ -69,14 +55,14 @@ func (h *Handler) DashboardHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	country, err := clients.FetchCountryInfo(reg.IsoCode)
+	country, err := clients.FetchCountryInfoFunc(reg.IsoCode)
 	if err != nil {
 		log.Printf("country fetch error for reg %s: %v", registrationID, err)
 		writeJSONError(w, http.StatusInternalServerError, "failed to fetch country information")
 		return
 	}
 
-	if len(country.Latlng) < 2 {
+	if len(country.Latlng) < utility.MinCountryCoordinates {
 		writeJSONError(w, http.StatusInternalServerError, "country coordinates unavailable")
 		return
 	}
@@ -100,7 +86,7 @@ func (h *Handler) DashboardHandler(w http.ResponseWriter, r *http.Request) {
 	h.triggerLifecycleWebhooks(ctx, "INVOKE", reg.IsoCode)
 	h.triggerThresholdWebhooks(ctx, reg.IsoCode, resp)
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(utility.ContentType, utility.ApplicationJSON)
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		log.Printf("failed to encode dashboard response: %v", err)
@@ -143,18 +129,18 @@ func populateWeatherFeatures(resp *models.DashboardResponse, reg models.StoredRe
 		return nil
 	}
 
-	weather, err := clients.FetchWeatherInfo(lat, lng)
+	weather, err := clients.FetchWeatherInfoFunc(lat, lng)
 	if err != nil {
 		return err
 	}
 
 	if reg.Features.Temperature {
-		temp := utility.MeanValue(weather.Hourly.Temperature2M)
+		temp := models.MeanValue(weather.Hourly.Temperature2M)
 		resp.Features.Temperature = &temp
 	}
 
 	if reg.Features.Precipitation {
-		precipitation := utility.MeanValue(weather.Hourly.Precipitation)
+		precipitation := models.MeanValue(weather.Hourly.Precipitation)
 		resp.Features.Precipitation = &precipitation
 	}
 
@@ -171,14 +157,14 @@ func populateAirQualityFeature(resp *models.DashboardResponse, reg models.Stored
 
 	if len(country.Capital) == 0 {
 		resp.Features.AirQuality = &models.AirQuality{
-			PM25:  -1,
-			PM10:  -1,
-			Level: "unknown",
+			PM25:  utility.UnknownAirQualityValue,
+			PM10:  utility.UnknownAirQualityValue,
+			Level: utility.AirQualityUnknown,
 		}
 		return nil
 	}
 
-	pm10, pm25, err := clients.FetchAirQualityInfo(country.ISOCode, country.Capital[0])
+	pm10, pm25, err := clients.FetchAirQualityInfoFunc(country.ISOCode, country.Capital[0])
 	if err != nil {
 		return err
 	}
@@ -205,7 +191,7 @@ func populateExchangeRateFeature(resp *models.DashboardResponse, reg models.Stor
 		break
 	}
 
-	currency, err := clients.FetchExchangeRate(reg.Features.TargetCurrencies, baseCurrency)
+	currency, err := clients.FetchExchangeRateFunc(reg.Features.TargetCurrencies, baseCurrency)
 	if err != nil {
 		return err
 	}
@@ -218,25 +204,25 @@ func populateExchangeRateFeature(resp *models.DashboardResponse, reg models.Stor
 // Returns "unknown" if pm25 is negative.
 func airQualityLevel(pm25 float64) string {
 	switch {
-	case pm25 <= 12.0:
-		return "Good"
-	case pm25 <= 35.4:
-		return "Moderate"
-	case pm25 <= 55.4:
-		return "Unhealthy for Sensitive Groups"
-	case pm25 <= 150.4:
-		return "Unhealthy"
-	case pm25 <= 250.4:
-		return "Very Unhealthy"
+	case pm25 <= utility.Pm25GoodMax:
+		return utility.AirQualityGood
+	case pm25 <= utility.Pm25ModerateMax:
+		return utility.AirQualityModerate
+	case pm25 <= utility.Pm25SensitiveGroupsMax:
+		return utility.AirQualitySensitiveGroups
+	case pm25 <= utility.Pm25UnhealthyMax:
+		return utility.AirQualityUnhealthy
+	case pm25 <= utility.Pm25VeryUnhealthyMax:
+		return utility.AirQualityVeryUnhealthy
 	default:
-		return "Hazardous"
+		return utility.AirQualityHazardous
 	}
 }
 
 // writeJSONError writes a JSON-encoded error response with the given HTTP status code
 // and message to the response writer.
 func writeJSONError(w http.ResponseWriter, status int, msg string) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(utility.ContentType, utility.ApplicationJSON)
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]string{
 		"error": msg,
