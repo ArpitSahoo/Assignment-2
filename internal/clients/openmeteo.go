@@ -1,6 +1,7 @@
 package clients
 
 import (
+	"assignment-2/internal/models"
 	"assignment-2/internal/utility"
 	"encoding/json"
 	"fmt"
@@ -13,7 +14,7 @@ import (
 
 // FetchWeatherInfo fetches weather data from the Open-Meteo API
 // for the given latitude and longitude coordinates.
-func FetchWeatherInfo(lat, lng float64) (utility.OpenMeteoResponse, error) {
+func FetchWeatherInfo(lat, lng float64) (models.OpenMeteoResponse, error) {
 	meteoURL := strings.NewReplacer(
 		"{lat}", strconv.FormatFloat(lat, 'f', 6, 64),
 		"{lng}", strconv.FormatFloat(lng, 'f', 6, 64),
@@ -21,7 +22,7 @@ func FetchWeatherInfo(lat, lng float64) (utility.OpenMeteoResponse, error) {
 
 	resp, err := http.Get(meteoURL)
 	if err != nil {
-		return utility.OpenMeteoResponse{}, fmt.Errorf("fetching weather: %w", err)
+		return models.OpenMeteoResponse{}, fmt.Errorf("fetching weather: %w", err)
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
@@ -32,12 +33,12 @@ func FetchWeatherInfo(lat, lng float64) (utility.OpenMeteoResponse, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return utility.OpenMeteoResponse{}, fmt.Errorf("weather api returned %d: %s", resp.StatusCode, string(body))
+		return models.OpenMeteoResponse{}, fmt.Errorf("weather api returned %d: %s", resp.StatusCode, string(body))
 	}
 
-	var info utility.OpenMeteoResponse
+	var info models.OpenMeteoResponse
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
-		return utility.OpenMeteoResponse{}, fmt.Errorf("decoding weather: %w", err)
+		return models.OpenMeteoResponse{}, fmt.Errorf("decoding weather: %w", err)
 	}
 	return info, nil
 }

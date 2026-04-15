@@ -1,6 +1,7 @@
 package clients
 
 import (
+	"assignment-2/internal/models"
 	"assignment-2/internal/utility"
 	"encoding/json"
 	"fmt"
@@ -45,7 +46,7 @@ func FetchAirQualityInfo(isoCode, cap string) (pm10, pm25 float64, err error) {
 
 // fetchOpenAQLocations queries the OpenAQ API for air quality monitoring locations
 // near the given coordinates within the specified country.
-func fetchOpenAQLocations(isoCode string, lat, lng float64) (utility.OpenAQResponse, error) {
+func fetchOpenAQLocations(isoCode string, lat, lng float64) (models.OpenAQResponse, error) {
 	openAQURL := strings.NewReplacer(
 		"{lat}", strconv.FormatFloat(lat, 'f', 6, 64),
 		"{lng}", strconv.FormatFloat(lng, 'f', 6, 64),
@@ -54,13 +55,13 @@ func fetchOpenAQLocations(isoCode string, lat, lng float64) (utility.OpenAQRespo
 
 	req, err := http.NewRequest(http.MethodGet, openAQURL, nil)
 	if err != nil {
-		return utility.OpenAQResponse{}, fmt.Errorf("creating OpenAQ request: %w", err)
+		return models.OpenAQResponse{}, fmt.Errorf("creating OpenAQ request: %w", err)
 	}
 	req.Header.Set("X-API-Key", openAQAPIKey)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return utility.OpenAQResponse{}, fmt.Errorf("fetching OpenAQ locations: %w", err)
+		return models.OpenAQResponse{}, fmt.Errorf("fetching OpenAQ locations: %w", err)
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
@@ -71,12 +72,12 @@ func fetchOpenAQLocations(isoCode string, lat, lng float64) (utility.OpenAQRespo
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return utility.OpenAQResponse{}, fmt.Errorf("OpenAQ locations returned %d: %s", resp.StatusCode, string(body))
+		return models.OpenAQResponse{}, fmt.Errorf("OpenAQ locations returned %d: %s", resp.StatusCode, string(body))
 	}
 
-	var aq utility.OpenAQResponse
+	var aq models.OpenAQResponse
 	if err := json.NewDecoder(resp.Body).Decode(&aq); err != nil {
-		return utility.OpenAQResponse{}, fmt.Errorf("decoding OpenAQ locations: %w", err)
+		return models.OpenAQResponse{}, fmt.Errorf("decoding OpenAQ locations: %w", err)
 	}
 
 	return aq, nil
@@ -112,7 +113,7 @@ func fetchLatestPMValues(locationID, pm10SensorID, pm25SensorID int) (pm10, pm25
 		return -1, -1, fmt.Errorf("OpenAQ latest returned %d: %s", resp.StatusCode, string(body))
 	}
 
-	var latest utility.OpenAQLatestResponse
+	var latest models.OpenAQLatestResponse
 	if err := json.NewDecoder(resp.Body).Decode(&latest); err != nil {
 		return -1, -1, fmt.Errorf("decoding OpenAQ latest: %w", err)
 	}
@@ -133,7 +134,7 @@ func fetchLatestPMValues(locationID, pm10SensorID, pm25SensorID int) (pm10, pm25
 // calculatePMAverages iterates over up to 5 OpenAQ locations, fetches their latest
 // PM10 and PM25 sensor readings, and returns the mean of each across all locations.
 // Returns -1 for either value if no valid readings are found.
-func calculatePMAverages(aq utility.OpenAQResponse) (pm10, pm25 float64, err error) {
+func calculatePMAverages(aq models.OpenAQResponse) (pm10, pm25 float64, err error) {
 	if len(aq.Results) == 0 {
 		return -1, -1, nil
 	}

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"assignment-2/internal/models"
 	"assignment-2/internal/utility"
 	"encoding/json"
 	"io"
@@ -46,7 +47,7 @@ func (h *Handler) registerWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 	}(r.Body)
 
-	var webhookReg utility.RegisterWebhook
+	var webhookReg models.RegisterWebhook
 	if err := json.NewDecoder(r.Body).Decode(&webhookReg); err != nil {
 		log.Println("Error decoding webhook registration request: ", err)
 		http.Error(w, "Invalid JSON payload: "+err.Error(), http.StatusBadRequest)
@@ -75,7 +76,7 @@ func (h *Handler) registerWebhook(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set(utility.ContentType, utility.ApplicationJSON)
 	w.WriteHeader(http.StatusCreated)
 
-	if err := json.NewEncoder(w).Encode(utility.WebhookResponse{
+	if err := json.NewEncoder(w).Encode(models.WebhookResponse{
 		ID: ref.ID,
 	}); err != nil {
 		log.Printf("Failed to encode webhook response: %v", err)
@@ -87,7 +88,7 @@ func (h *Handler) registerWebhook(w http.ResponseWriter, r *http.Request) {
 // It ensures the URL is provided and the event type is valid.
 // For THRESHOLD events, delegates threshold validation to validateThreshold.
 // Returns true if validation fails, false if all checks pass.
-func validateWebhook(w http.ResponseWriter, webhook utility.RegisterWebhook) bool {
+func validateWebhook(w http.ResponseWriter, webhook models.RegisterWebhook) bool {
 	if webhook.Url == "" {
 		log.Println("Webhook URL is required")
 		http.Error(w, "Webhook URL is required", http.StatusBadRequest)
@@ -121,7 +122,7 @@ func validateWebhook(w http.ResponseWriter, webhook utility.RegisterWebhook) boo
 
 // validateThreshold validates the threshold block of a webhook registration request.
 // Returns true if validation fails, false if it passes.
-func validateThreshold(w http.ResponseWriter, threshold *utility.Threshold) bool {
+func validateThreshold(w http.ResponseWriter, threshold *models.Threshold) bool {
 	if threshold == nil {
 		log.Println("Error threshold block is required for THRESHOLD event")
 		http.Error(w, "Error threshold block is required for THRESHOLD event", http.StatusBadRequest)
@@ -169,9 +170,9 @@ func (h *Handler) getAllWebhooks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var webhooks []utility.RegisterWebhook
+	var webhooks []models.RegisterWebhook
 	for _, doc := range docs {
-		var webhook utility.RegisterWebhook
+		var webhook models.RegisterWebhook
 		if err := doc.DataTo(&webhook); err != nil {
 			log.Printf("Error converting document to webhook: %v", err)
 			http.Error(w, "Error processing webhook data: "+err.Error(), http.StatusInternalServerError)
@@ -200,7 +201,7 @@ func (h *Handler) getWebhookByID(w http.ResponseWriter, r *http.Request, id stri
 		return
 	}
 
-	var webhook utility.RegisterWebhook
+	var webhook models.RegisterWebhook
 	if err := doc.DataTo(&webhook); err != nil {
 		log.Printf("Error converting document to webhook: %v", err)
 		http.Error(w, "Error processing webhook data: "+err.Error(), http.StatusInternalServerError)

@@ -1,6 +1,7 @@
 package clients
 
 import (
+	"assignment-2/internal/models"
 	"assignment-2/internal/utility"
 	"encoding/json"
 	"fmt"
@@ -40,7 +41,7 @@ func fetchCapitalCoordinates(isoCode, city string) (lat, lng float64, err error)
 		return 0, 0, fmt.Errorf("OSM returned %d: %s", resp.StatusCode, string(body))
 	}
 
-	var osmResults []utility.OSMResponse
+	var osmResults []models.OSMResponse
 	if err := json.NewDecoder(resp.Body).Decode(&osmResults); err != nil {
 		return 0, 0, fmt.Errorf("decoding OSM: %w", err)
 	}

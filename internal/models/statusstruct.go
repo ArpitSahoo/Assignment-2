@@ -1,4 +1,4 @@
-package utility
+package models
 
 // StatusResponse represents the status.
 type StatusResponse struct {

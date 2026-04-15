@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"assignment-2/internal/models"
 	"assignment-2/internal/utility"
 	"context"
 	"encoding/json"
@@ -381,7 +382,7 @@ func (h *Handler) deleteRegistration(w http.ResponseWriter, r *http.Request) {
 
 // decodeRegReq decodes the JSON request body into a registration request.
 // Writes a HTTP error response if decoding fails.
-func decodeRegReq(w http.ResponseWriter, r *http.Request, regReq *utility.RegistrationRequest) bool {
+func decodeRegReq(w http.ResponseWriter, r *http.Request, regReq *models.RegistrationRequest) bool {
 	if err := json.NewDecoder(r.Body).Decode(regReq); err != nil {
 		log.Printf("Failed to decode registration request: %v", err)
 		http.Error(w, "invalid json payload", http.StatusBadRequest)
@@ -393,7 +394,7 @@ func decodeRegReq(w http.ResponseWriter, r *http.Request, regReq *utility.Regist
 // encodeRegResp encodes a registration response as JSON and logs an error if
 // encoding fails.
 func encodeRegResp(w http.ResponseWriter, id, lastChange string) {
-	if err := json.NewEncoder(w).Encode(utility.RegistrationResponse{
+	if err := json.NewEncoder(w).Encode(models.RegistrationResponse{
 		ID:         id,
 		LastChange: lastChange,
 	}); err != nil {
@@ -415,7 +416,7 @@ func firestoreContext(r *http.Request) context.Context {
 
 // validateRegReq validates registration fields and writes an HTTP error
 // response if validation fails.
-func validateRegReq(w http.ResponseWriter, regReq utility.RegistrationRequest) bool {
+func validateRegReq(w http.ResponseWriter, regReq models.RegistrationRequest) bool {
 	if len(regReq.IsoCode) != utility.IsoCodeLength {
 		log.Printf("Invalid isoCode: %q", regReq.IsoCode)
 		http.Error(w, "iso-code must be 2-letter country code", http.StatusBadRequest)
@@ -465,7 +466,7 @@ func validateRegReq(w http.ResponseWriter, regReq utility.RegistrationRequest) b
 
 // normalizeFields normalizes registration request fields into consistent
 // format before validation or storage.
-func normalizeFields(regReq *utility.RegistrationRequest) {
+func normalizeFields(regReq *models.RegistrationRequest) {
 	regReq.Country = strings.TrimSpace(regReq.Country)
 	regReq.IsoCode = strings.ToUpper(strings.TrimSpace(regReq.IsoCode))
 
@@ -477,24 +478,24 @@ func normalizeFields(regReq *utility.RegistrationRequest) {
 
 // parseRegReq decodes, normalizes and validates a registration request.
 // Returns the parsed request, false if any step fails.
-func parseRegReq(w http.ResponseWriter, r *http.Request) (utility.RegistrationRequest, bool) {
-	var regReq utility.RegistrationRequest
+func parseRegReq(w http.ResponseWriter, r *http.Request) (models.RegistrationRequest, bool) {
+	var regReq models.RegistrationRequest
 
 	if decodeRegReq(w, r, &regReq) {
-		return utility.RegistrationRequest{}, false
+		return models.RegistrationRequest{}, false
 	}
 
 	normalizeFields(&regReq)
 
 	if validateRegReq(w, regReq) {
-		return utility.RegistrationRequest{}, false
+		return models.RegistrationRequest{}, false
 	}
 	return regReq, true
 }
 
 // decodePatchRegReq decodes the JSON request body into PATCH registration request.
 // Writes an HTTP error response if decoding fails.
-func decodePatchRegReq(w http.ResponseWriter, r *http.Request, regReq *utility.RegistrationPatchRequest) bool {
+func decodePatchRegReq(w http.ResponseWriter, r *http.Request, regReq *models.RegistrationPatchRequest) bool {
 	if err := json.NewDecoder(r.Body).Decode(regReq); err != nil {
 		log.Printf("Failed to decode patch request: %v", err)
 		http.Error(w, "invalid json payload", http.StatusBadRequest)
@@ -505,7 +506,7 @@ func decodePatchRegReq(w http.ResponseWriter, r *http.Request, regReq *utility.R
 
 // normalizePatchFields normalizes registration request fields into consistent
 // format before validation or storage.
-func normalizePatchFields(regReq *utility.RegistrationPatchRequest) {
+func normalizePatchFields(regReq *models.RegistrationPatchRequest) {
 	if regReq.Country != nil {
 		trim := strings.TrimSpace(*regReq.Country)
 		regReq.Country = &trim
@@ -526,7 +527,7 @@ func normalizePatchFields(regReq *utility.RegistrationPatchRequest) {
 
 // validatePatchRegReq validates registration fields and writes an HTTP error
 // response if validation fails.
-func validatePatchRegReq(w http.ResponseWriter, regReq utility.RegistrationPatchRequest) bool {
+func validatePatchRegReq(w http.ResponseWriter, regReq models.RegistrationPatchRequest) bool {
 	if regReq.IsoCode != nil {
 		if len(*regReq.IsoCode) != utility.IsoCodeLength {
 			log.Printf("Invalid isoCode: %q", *regReq.IsoCode)
@@ -592,17 +593,17 @@ func validatePatchRegReq(w http.ResponseWriter, regReq utility.RegistrationPatch
 
 // parsePatchRegReq decodes, normalizes and validates a registration request.
 // Returns the parsed request, false if any step fails.
-func parsePatchRegReq(w http.ResponseWriter, r *http.Request) (utility.RegistrationPatchRequest, bool) {
-	var regReq utility.RegistrationPatchRequest
+func parsePatchRegReq(w http.ResponseWriter, r *http.Request) (models.RegistrationPatchRequest, bool) {
+	var regReq models.RegistrationPatchRequest
 
 	if decodePatchRegReq(w, r, &regReq) {
-		return utility.RegistrationPatchRequest{}, false
+		return models.RegistrationPatchRequest{}, false
 	}
 
 	normalizePatchFields(&regReq)
 
 	if validatePatchRegReq(w, regReq) {
-		return utility.RegistrationPatchRequest{}, false
+		return models.RegistrationPatchRequest{}, false
 	}
 	return regReq, true
 }
@@ -677,7 +678,7 @@ func addPatchBoolUpdateIfSet(update []firestore.Update, fields []boolUpdateField
 
 // buildGeneralPatchUpdate creates Firestore update for general PATCH
 // fields. Includes an updated last-change timestamp.
-func buildGeneralPatchUpdate(patch *utility.RegistrationPatchRequest, lastChange string) []firestore.Update {
+func buildGeneralPatchUpdate(patch *models.RegistrationPatchRequest, lastChange string) []firestore.Update {
 	update := []firestore.Update{
 		{Path: "lastChange", Value: lastChange},
 	}
@@ -763,7 +764,7 @@ func buildRemoveCurrencyUpdate(currencies *[]string) []firestore.Update {
 
 // buildCurrencyPatchUpdate constructs a Firestore update slice for PATCH requests
 // that can replace, add or remove target currencies.
-func buildCurrencyPatchUpdate(features *utility.RegistrationPatchFeatures) []firestore.Update {
+func buildCurrencyPatchUpdate(features *models.RegistrationPatchFeatures) []firestore.Update {
 	// Return early to avoid dereferencing a nil feature pointer
 	if features == nil {
 		return nil

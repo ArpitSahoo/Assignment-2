@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"assignment-2/internal/models"
 	"assignment-2/internal/utility"
 	"context"
 	"encoding/json"
@@ -16,7 +17,7 @@ func TestTriggerLifecycleWebhooks(t *testing.T) {
 	client := newTestFirestoreClient(t)
 	clearFirestoreEmulator(t)
 
-	var received utility.WebhookInvocationPayload
+	var received models.WebhookInvocationPayload
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&received)
 		w.WriteHeader(http.StatusOK)
@@ -41,7 +42,7 @@ func TestTriggerThresholdWebhooks(t *testing.T) {
 	client := newTestFirestoreClient(t)
 	clearFirestoreEmulator(t)
 
-	var received utility.WebhookInvocationPayload
+	var received models.WebhookInvocationPayload
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&received)
 		w.WriteHeader(http.StatusOK)
@@ -61,8 +62,8 @@ func TestTriggerThresholdWebhooks(t *testing.T) {
 	require.NoError(t, err)
 
 	temp := 5.0
-	dashboard := utility.DashboardResponse{
-		Features: utility.DashboardFeatures{
+	dashboard := models.DashboardResponse{
+		Features: models.DashboardFeatures{
 			Temperature: &temp,
 		},
 	}
@@ -127,7 +128,7 @@ func TestTriggerLifecycleWebhooksEmptyCountryFiresForAll(t *testing.T) {
 	client := newTestFirestoreClient(t)
 	clearFirestoreEmulator(t)
 
-	var received utility.WebhookInvocationPayload
+	var received models.WebhookInvocationPayload
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&received)
 		w.WriteHeader(http.StatusOK)
@@ -172,8 +173,8 @@ func TestTriggerThresholdWebhooksNegative(t *testing.T) {
 	require.NoError(t, err)
 
 	temp := 5.0
-	dashboard := utility.DashboardResponse{
-		Features: utility.DashboardFeatures{
+	dashboard := models.DashboardResponse{
+		Features: models.DashboardFeatures{
 			Temperature: &temp,
 		},
 	}
@@ -188,7 +189,7 @@ func TestTriggerThresholdWebhooksCompound(t *testing.T) {
 	client := newTestFirestoreClient(t)
 	clearFirestoreEmulator(t)
 
-	var received utility.WebhookInvocationPayload
+	var received models.WebhookInvocationPayload
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&received)
 		w.WriteHeader(http.StatusOK)
@@ -210,8 +211,8 @@ func TestTriggerThresholdWebhooksCompound(t *testing.T) {
 	require.NoError(t, err)
 
 	temp := 5.0
-	dashboard := utility.DashboardResponse{
-		Features: utility.DashboardFeatures{
+	dashboard := models.DashboardResponse{
+		Features: models.DashboardFeatures{
 			Temperature: &temp,
 		},
 	}
@@ -252,11 +253,11 @@ func TestCheckThreshold(t *testing.T) {
 func TestGetMeasuredValuePositive(t *testing.T) {
 	temp := 31.29
 	perc := 5.00
-	dashboard := utility.DashboardResponse{
-		Features: utility.DashboardFeatures{
+	dashboard := models.DashboardResponse{
+		Features: models.DashboardFeatures{
 			Temperature:   &temp,
 			Precipitation: &perc,
-			AirQuality: &utility.AirQuality{
+			AirQuality: &models.AirQuality{
 				PM25: 225.67,
 				PM10: 89.0,
 			},
@@ -285,9 +286,9 @@ func TestGetMeasuredValuePositive(t *testing.T) {
 }
 
 func TestGetMeasuredValueNegative(t *testing.T) {
-	dashboard := utility.DashboardResponse{
-		Features: utility.DashboardFeatures{
-			AirQuality: &utility.AirQuality{
+	dashboard := models.DashboardResponse{
+		Features: models.DashboardFeatures{
+			AirQuality: &models.AirQuality{
 				PM25: 225.67,
 				PM10: 89.0,
 			},
@@ -325,7 +326,7 @@ func TestMatchesCountry(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		webhook := utility.RegisterWebhook{Country: tt.webhookCountry}
+		webhook := models.RegisterWebhook{Country: tt.webhookCountry}
 		result := matchesCountry(webhook, tt.country)
 		if result != tt.expected {
 			t.Errorf("matchesCountry(%s, %s) = %v, want %v",

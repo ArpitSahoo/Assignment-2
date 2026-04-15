@@ -1,4 +1,4 @@
-package utility
+package models
 
 // RegistrationRequest represents a JSON payload used to create or replace
 // a dashboard configuration through the /registrations endpoint.
@@ -28,7 +28,6 @@ type RegistrationResponse struct {
 	LastChange string `json:"lastChange"`
 }
 
-
 // StoredRegistration represents a registration document as persisted in Firestore.
 type StoredRegistration struct {
 	ID         string               `json:"id,omitempty" firestore:"-"`
@@ -37,6 +36,7 @@ type StoredRegistration struct {
 	Features   RegistrationFeatures `json:"features" firestore:"features"`
 	LastChange string               `json:"lastChange" firestore:"lastChange"`
 }
+
 // RegistrationPatchRequest is a JSON payload used to partially update
 // a stored dashboard configuration through the /registrations/{id} endpoint.
 type RegistrationPatchRequest struct {

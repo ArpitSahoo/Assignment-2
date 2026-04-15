@@ -1,6 +1,7 @@
 package clients
 
 import (
+	"assignment-2/internal/models"
 	"assignment-2/internal/utility"
 	"encoding/json"
 	"fmt"
@@ -11,10 +12,10 @@ import (
 
 // FetchCountryInfo fetches country data from the REST Countries API using the given ISO code.
 // Returns the first result, or an error if the request fails or no country is found.
-func FetchCountryInfo(isoCode string) (utility.RestCountryResponse, error) {
+func FetchCountryInfo(isoCode string) (models.RestCountryResponse, error) {
 	resp, err := http.Get(utility.RestCountriesApiUrl + isoCode)
 	if err != nil {
-		return utility.RestCountryResponse{}, fmt.Errorf("fetching country: %w", err)
+		return models.RestCountryResponse{}, fmt.Errorf("fetching country: %w", err)
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
@@ -25,15 +26,15 @@ func FetchCountryInfo(isoCode string) (utility.RestCountryResponse, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return utility.RestCountryResponse{}, fmt.Errorf("countries api returned %d: %s", resp.StatusCode, string(body))
+		return models.RestCountryResponse{}, fmt.Errorf("countries api returned %d: %s", resp.StatusCode, string(body))
 	}
 
-	var results []utility.RestCountryResponse
+	var results []models.RestCountryResponse
 	if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
-		return utility.RestCountryResponse{}, fmt.Errorf("decoding country: %w", err)
+		return models.RestCountryResponse{}, fmt.Errorf("decoding country: %w", err)
 	}
 	if len(results) == 0 {
-		return utility.RestCountryResponse{}, fmt.Errorf("no country found for code %s", isoCode)
+		return models.RestCountryResponse{}, fmt.Errorf("no country found for code %s", isoCode)
 	}
 	return results[0], nil
 }

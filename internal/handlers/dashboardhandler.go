@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"assignment-2/internal/clients"
+	"assignment-2/internal/models"
 	"assignment-2/internal/utility"
 	"context"
 	"encoding/json"
@@ -15,15 +16,15 @@ import (
 
 // getRegistrationByID retrieves a stored registration from Firestore by its document ID.
 // Returns the populated StoredRegistration with its ID set, or an error if not found.
-func getRegistrationByID(ctx context.Context, client *firestore.Client, id string) (utility.StoredRegistration, error) {
+func getRegistrationByID(ctx context.Context, client *firestore.Client, id string) (models.StoredRegistration, error) {
 	doc, err := client.Collection(utility.RegistrationsCollection).Doc(id).Get(ctx)
 	if err != nil {
-		return utility.StoredRegistration{}, err
+		return models.StoredRegistration{}, err
 	}
 
-	var reg utility.StoredRegistration
+	var reg models.StoredRegistration
 	if err := doc.DataTo(&reg); err != nil {
-		return utility.StoredRegistration{}, err
+		return models.StoredRegistration{}, err
 	}
 
 	reg.ID = doc.Ref.ID
@@ -94,7 +95,7 @@ func (h *Handler) DashboardHandler(w http.ResponseWriter, r *http.Request) {
 
 // populateCountryFeatures fills in country-related fields on the dashboard response
 // based on which features are enabled in the registration.
-func populateCountryFeatures(resp *utility.DashboardResponse, reg utility.StoredRegistration, country utility.RestCountryResponse) {
+func populateCountryFeatures(resp *models.DashboardResponse, reg models.StoredRegistration, country models.RestCountryResponse) {
 	lat := country.Latlng[0]
 	lng := country.Latlng[1]
 
@@ -104,7 +105,7 @@ func populateCountryFeatures(resp *utility.DashboardResponse, reg utility.Stored
 	}
 
 	if reg.Features.Coordinates {
-		resp.Features.Coordinates = &utility.Coordinates{
+		resp.Features.Coordinates = &models.Coordinates{
 			Latitude:  lat,
 			Longitude: lng,
 		}
@@ -123,7 +124,7 @@ func populateCountryFeatures(resp *utility.DashboardResponse, reg utility.Stored
 
 // populateWeatherFeatures fetches weather data and populates temperature and/or
 // precipitation on the dashboard response, if those features are enabled in the registration.
-func populateWeatherFeatures(resp *utility.DashboardResponse, reg utility.StoredRegistration, lat, lng float64) error {
+func populateWeatherFeatures(resp *models.DashboardResponse, reg models.StoredRegistration, lat, lng float64) error {
 	if !reg.Features.Temperature && !reg.Features.Precipitation {
 		return nil
 	}
@@ -149,13 +150,13 @@ func populateWeatherFeatures(resp *utility.DashboardResponse, reg utility.Stored
 // populateAirQualityFeature fetches air quality data for the country's capital and
 // populates PM2.5, PM10, and an air quality level string on the dashboard response.
 // Sets all values to -1 with level "unknown" if no capital is available.
-func populateAirQualityFeature(resp *utility.DashboardResponse, reg utility.StoredRegistration, country utility.RestCountryResponse) error {
+func populateAirQualityFeature(resp *models.DashboardResponse, reg models.StoredRegistration, country models.RestCountryResponse) error {
 	if !reg.Features.AirQuality {
 		return nil
 	}
 
 	if len(country.Capital) == 0 {
-		resp.Features.AirQuality = &utility.AirQuality{
+		resp.Features.AirQuality = &models.AirQuality{
 			PM25:  -1,
 			PM10:  -1,
 			Level: "unknown",
@@ -168,7 +169,7 @@ func populateAirQualityFeature(resp *utility.DashboardResponse, reg utility.Stor
 		return err
 	}
 
-	resp.Features.AirQuality = &utility.AirQuality{
+	resp.Features.AirQuality = &models.AirQuality{
 		PM25:  pm25,
 		PM10:  pm10,
 		Level: airQualityLevel(pm25),
@@ -179,7 +180,7 @@ func populateAirQualityFeature(resp *utility.DashboardResponse, reg utility.Stor
 // populateExchangeRateFeature fetches exchange rates for the target currencies specified
 // in the registration, using the country's own currency as the base rate.
 // Skips fetching entirely if no target currencies are registered.
-func populateExchangeRateFeature(resp *utility.DashboardResponse, reg utility.StoredRegistration, country utility.RestCountryResponse) error {
+func populateExchangeRateFeature(resp *models.DashboardResponse, reg models.StoredRegistration, country models.RestCountryResponse) error {
 	if len(reg.Features.TargetCurrencies) == 0 {
 		return nil
 	}
@@ -244,11 +245,11 @@ func writeJSONError(w http.ResponseWriter, status int, msg string) {
 
 // newDashboardResponse creates a new DashboardResponse initialised with the country
 // name, ISO code, and the current time as the last retrieval timestamp.
-func newDashboardResponse(country utility.RestCountryResponse) utility.DashboardResponse {
-	return utility.DashboardResponse{
+func newDashboardResponse(country models.RestCountryResponse) models.DashboardResponse {
+	return models.DashboardResponse{
 		Country:       country.Name.Common,
 		ISOCode:       country.ISOCode,
-		Features:      utility.DashboardFeatures{},
+		Features:      models.DashboardFeatures{},
 		LastRetrieval: time.Now().Format("20060102 15:04"),
 	}
 }

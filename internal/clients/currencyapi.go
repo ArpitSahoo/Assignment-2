@@ -1,6 +1,7 @@
 package clients
 
 import (
+	"assignment-2/internal/models"
 	"assignment-2/internal/utility"
 	"encoding/json"
 	"fmt"
@@ -41,7 +42,7 @@ func FetchExchangeRate(targetCur []string, cur string) (map[string]float64, erro
 		return nil, fmt.Errorf("exchange rate api returned %d: %s", resp.StatusCode, string(body))
 	}
 
-	var exchangeRate utility.ExchangeRateResponse
+	var exchangeRate models.ExchangeRateResponse
 	if err := json.NewDecoder(resp.Body).Decode(&exchangeRate); err != nil {
 		return nil, fmt.Errorf("decoding exchange rates: %w", err)
 	}

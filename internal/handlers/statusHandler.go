@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"assignment-2/internal/models"
 	"assignment-2/internal/utility"
 	"context"
 	"encoding/json"
@@ -35,7 +36,7 @@ func (h *Handler) handleGetStatus(w http.ResponseWriter) {
 	uptimeSeconds := int(time.Since(startTime).Seconds())
 	webhookCount := h.getWebhookCount()
 
-	resp := utility.StatusResponse{
+	resp := models.StatusResponse{
 		RestCountriesAPI: results["restCountries"],
 		MeteoAPI:         results["meteo"],
 		OpenAQ:           results["openAQ"],
@@ -73,11 +74,11 @@ func getAPIStatuses() map[string]int {
 		{name: "currency", url: utility.CurrencyProbe},
 	}
 
-	resultCh := make(chan utility.ApiResult, len(probes))
+	resultCh := make(chan models.ApiResult, len(probes))
 
 	for _, p := range probes {
 		go func(p probe) {
-			resultCh <- utility.ApiResult{Name: p.name, Status: checkAPIStatus(p.url, p.apiKey)}
+			resultCh <- models.ApiResult{Name: p.name, Status: checkAPIStatus(p.url, p.apiKey)}
 		}(p)
 	}
 

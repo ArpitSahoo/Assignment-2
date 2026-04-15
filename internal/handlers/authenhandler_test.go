@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"assignment-2/internal/models"
 	"assignment-2/internal/utility"
 	"encoding/json"
 	"fmt"
@@ -23,7 +24,7 @@ func newTestAuthHandler(t *testing.T) *Handler {
 	}
 }
 
-func createAPIKeyHelper(t *testing.T, h *Handler, name, email string) (utility.AuthenticationResponse, int) {
+func createAPIKeyHelper(t *testing.T, h *Handler, name, email string) (models.AuthenticationResponse, int) {
 	t.Helper()
 	body := fmt.Sprintf(`{"name":"%s","email":"%s"}`, name, email)
 	req := httptest.NewRequest(http.MethodPost, utility.AuthPath, strings.NewReader(body))
@@ -31,7 +32,7 @@ func createAPIKeyHelper(t *testing.T, h *Handler, name, email string) (utility.A
 	rr := httptest.NewRecorder()
 	h.HandleAuthenticationReq(rr, req)
 
-	var resp utility.AuthenticationResponse
+	var resp models.AuthenticationResponse
 	// attempt to decode if body is JSON; ignore decode error for negative cases
 	_ = json.NewDecoder(rr.Body).Decode(&resp)
 	return resp, rr.Code

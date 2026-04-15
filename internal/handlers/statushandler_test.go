@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"assignment-2/internal/utility"
+	"assignment-2/internal/models"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -62,7 +62,7 @@ func TestHandleStatus_FirestoreReachable(t *testing.T) {
 
 	h.HandleStatus(w, r)
 
-	var body utility.StatusResponse
+	var body models.StatusResponse
 	err := json.NewDecoder(w.Result().Body).Decode(&body)
 	require.NoError(t, err)
 
@@ -80,7 +80,7 @@ func TestHandleStatus_WebhookCount(t *testing.T) {
 
 	h.HandleStatus(w, r)
 
-	var body utility.StatusResponse
+	var body models.StatusResponse
 	err := json.NewDecoder(w.Result().Body).Decode(&body)
 	require.NoError(t, err)
 
