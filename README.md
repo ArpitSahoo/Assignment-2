@@ -103,7 +103,7 @@ All endpoints are versioned under `/envdash/v1/`.
 |--------|------|-------------|
 | `GET` | `/status/` | Service health and upstream availability |
 
-### Authentication (Advanced — if implemented)
+### Authentication 
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/envdash/v1/auth/` | Register and obtain API key |
@@ -116,7 +116,7 @@ For full request/response examples, see the [assignment specification](LINK TO A
 ## Setup — Local Development
 
 ### Prerequisites
-- Go [INSERT VERSION — e.g. 1.23+]
+- Go [1.25.0](https://go.dev/dl/)
 - A Firebase Firestore service account key (`secret.json`)
 - An OpenAQ API key (free at [explore.openaq.org](https://explore.openaq.org))
 
@@ -288,7 +288,16 @@ Manage API client registration and key revocation.
 
 ## Setup — SkyHigh Deployment
 
-Trenge med dette?
+In addition to the local Docker setup, deploying to SkyHigh requires:
+1. SSH access to your assigned VM
+2. Docker installed on the VM
+3. Securely copying your `secret.json` to the VM
+4. Setting environment variables and running the service with Docker Compose on the VM
+5. Ensuring the VM's security group allows inbound traffic on the configured port
+6. Accessing the service at `http://[VM IP]:[PORT]/` after deployment
+7. Monitoring logs with `docker compose logs -f` for troubleshooting
+8. Optionally setting up a process manager like `systemd` or `supervisord` for production deployments to ensure the service restarts on failure and starts on boot.
+9. Lastly, the docker file and compose file should be configured to run in production mode, with appropriate environment variables and resource limits for the SkyHigh environment.
 
 ---
 
@@ -303,9 +312,6 @@ Trenge med dette?
 | `OPENAQ_API_KEY` | Yes | — | API key for OpenAQ v3 |
 | `FIRESTORE_EMULATOR_HOST` | No | — | If set, Firestore client connects to this emulator address (used for testing) |
 | `GOOGLE_CLOUD_PROJECT` | No | `test-project` | Project ID — only used when running against the emulator |
-
-
-Trenge med någe for caching?
 
 ---
 
