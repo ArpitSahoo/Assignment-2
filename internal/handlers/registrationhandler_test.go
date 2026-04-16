@@ -1927,7 +1927,7 @@ func TestGetRegistrationByID_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var got utility.StoredRegistration
+	var got models.StoredRegistration
 	err = json.NewDecoder(resp.Body).Decode(&got)
 
 	assert.NoError(t, err)
