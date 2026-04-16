@@ -40,7 +40,7 @@ func FetchAirQualityInfo(ctx context.Context, isoCode, cap string) (pm10, pm25 f
 		return utility.UnknownAirQualityValue, utility.UnknownAirQualityValue, err
 	}
 
-	aq, err := fetchOpenAQLocations(ctx, isoCode, lat, lng)
+	aq, err := fetchOpenAQLocations(ctx, lat, lng)
 	if err != nil {
 		return utility.UnknownAirQualityValue, utility.UnknownAirQualityValue, err
 	}
