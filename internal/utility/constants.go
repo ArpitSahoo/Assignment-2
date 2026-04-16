@@ -68,9 +68,10 @@ const (
 
 // Validation lengths
 const (
-	IsoCodeLength         = 2
-	CurrencyCodeLength    = 3
-	MinCountryCoordinates = 2
+	IsoCodeLength           = 2
+	CurrencyCodeLength      = 3
+	MinCountryCoordinates   = 2
+	RegistrationDocIDLength = 20
 )
 
 // Air quality thresholds (PM25 based on AQI breakpoints)
