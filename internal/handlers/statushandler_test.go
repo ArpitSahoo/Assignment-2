@@ -58,7 +58,7 @@ func TestHandleStatus_FirestoreReachable(t *testing.T) {
 	h := &Handler{Client: client}
 
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/status", nil)
+	r := httptest.NewRequest(http.MethodGet, "/status/", nil)
 
 	h.HandleStatus(w, r)
 
@@ -76,7 +76,7 @@ func TestHandleStatus_WebhookCount(t *testing.T) {
 	h := &Handler{Client: client}
 
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/status", nil)
+	r := httptest.NewRequest(http.MethodGet, "/status/", nil)
 
 	h.HandleStatus(w, r)
 
