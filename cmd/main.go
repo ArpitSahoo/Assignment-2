@@ -56,6 +56,7 @@ func main() {
 	router.HandleFunc(utility.NotificationPathBase, handler.WebhookHandler)
 	router.HandleFunc(utility.NotificationPath, handler.WebhookIDHandler)
 	router.HandleFunc(utility.StatusPath, handler.HandleStatus)
+	router.HandleFunc(utility.AuthPathKey, handler.HandleAuthenticationReq)
 
 	log.Printf("Server running on http://localhost:%s", port)
 	log.Printf("Registration endpoint: http://localhost:%s%s", port, utility.RegistrationPath)
