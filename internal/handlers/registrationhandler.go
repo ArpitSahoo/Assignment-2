@@ -24,7 +24,7 @@ import (
 type Handler struct {
 	Client                          *firestore.Client
 	RegistrationCount, WebhookCount atomic.Int64
-	//
+	// TODO: re-add API for Caching
 }
 
 // addRegistrationDocImpl stores a registration document, returns a generated ID.
