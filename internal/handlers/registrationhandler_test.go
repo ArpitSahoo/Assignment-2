@@ -1924,6 +1924,35 @@ func TestHandleAllGetRegistrationsSuccess(t *testing.T) {
 	}
 }
 
+func TestHandleAllGetRegistrationHeadValidDocIDExists(t *testing.T) {
+	origin := getRegistrationDoc
+	getRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
+		return nil
+	}
+	defer func() {
+		getRegistrationDoc = origin
+	}()
+
+	h := &Handler{}
+
+	req := httptest.NewRequest(http.MethodHead, "/envdash/v1/registrations/{id}", nil)
+	req.SetPathValue("id", "12345678901234567890")
+	w := httptest.NewRecorder()
+
+	h.handleAllGetRegistration(w, req)
+
+	resp := w.Result()
+	defer func(body io.ReadCloser) {
+		err := body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "", w.Body.String())
+}
+
 func TestHandleAllGetRegistrationsGetNoIDCallsGetAllSuccess(t *testing.T) {
 	clearFirestoreEmulator(t)
 
@@ -1976,25 +2005,54 @@ func TestHandleAllGetRegistrationsGetNoIDCallsGetAllSuccess(t *testing.T) {
 	assert.Equal(t, "NO", got[0].IsoCode)
 }
 
-func TestHandleAllGetRegistrationInvalidDocIDLength(t *testing.T) {
+func TestHandleAllGetRegistrationsHeadInvalidDocIDLength(t *testing.T) {
 	h := &Handler{}
 
-	req := httptest.NewRequest(http.MethodGet, "/envdash/v1/registrations/{id}", nil)
-	req.SetPathValue("id", "short-id") // len != 20
+	req := httptest.NewRequest(http.MethodHead, "/envdash/v1/registrations/{id}", nil)
+	req.SetPathValue("id", "short-id")
 	w := httptest.NewRecorder()
 
 	h.handleAllGetRegistration(w, req)
 
 	resp := w.Result()
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
+	defer func(body io.ReadCloser) {
+		err := body.Close()
 		if err != nil {
 			t.Fatal(err)
 		}
 	}(resp.Body)
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-	assert.Equal(t, utility.ApplicationJSON, resp.Header.Get("Content-Type"))
+	assert.Equal(t, "", w.Body.String())
+}
+
+func TestHandleAllGetRegistrationHeadValidDocIDNotFound(t *testing.T) {
+	origin := getRegistrationDoc
+	getRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
+		return errors.New("not found")
+	}
+	defer func() {
+		getRegistrationDoc = origin
+	}()
+
+	h := &Handler{}
+
+	req := httptest.NewRequest(http.MethodHead, "/envdash/v1/registrations/{id}", nil)
+	req.SetPathValue("id", "12345678901234567890")
+	w := httptest.NewRecorder()
+
+	h.handleAllGetRegistration(w, req)
+
+	resp := w.Result()
+	defer func(body io.ReadCloser) {
+		err := body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, "", w.Body.String())
 }
 
 func TestHandleRegReqHeadRoutingSuccess(t *testing.T) {
