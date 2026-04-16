@@ -1,0 +1,20 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: assignment-2-api
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      PORT: "8080"
+      GOOGLE_APPLICATION_CREDENTIALS: "/googlecredentials/firebase-credential.json"
+    volumes:
+        - "./.secrets:/googlecredentials:ro"
+
+
+
+
+
