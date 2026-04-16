@@ -1,53 +1,80 @@
 package utility
 
-const RegistrationsCollection = "registrations"
+// Firestore collections
+const (
+	RegistrationsCollection = "registrations"
+	WebhooksCollection      = "webhooks"
+	APIKeysCollection       = "apiKeys"
+)
 
-const WebhooksCollection = "webhooks"
+// API route paths
+const (
+	RegistrationPath     = "/envdash/v1/registrations/"
+	RegistrationPathID   = "/envdash/v1/registrations/{id}"
+	NotificationPath     = "/envdash/v1/notifications/{id}"
+	NotificationPathBase = "/envdash/v1/notifications/"
+	DashboardPath        = "/envdash/v1/dashboard/{id}"
+	StatusPath           = "/status/"
+	AuthPath             = "/envdash/v1/auth/"
+	AuthPathKey          = "/envdash/v1/auth/{key}"
+)
 
-const RegistrationPath = "/envdash/v1/registrations/"
-const RegistrationPathID = "/envdash/v1/registrations/{id}"
+// External API base URLs
+const (
+	RestCountriesAPIURL = "http://129.241.150.113:8080/v3.1/alpha/"
+	OpenMeteoAPIURL     = "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lng}&hourly=temperature_2m,precipitation"
+	OpenAQURL           = "https://api.openaq.org/v3/locations?coordinates={lat},{lng}&radius=25000&parameters_id=1,2&iso={isoCode}&limit=100"
+	OpenAQLatestURL     = "https://api.openaq.org/v3/locations/{id}/latest"
+	OSMURL              = "https://nominatim.openstreetmap.org/search?city={cap}&countrycodes={isoCode}&format=jsonv2&addressdetails=1&limit=1"
+	CurrencyAPIURL      = "https://api.exchangerate-api.com/v4/latest/{cur}"
+)
 
-const NotificationPath = "/envdash/v1/notifications/{id}"
-const NotificationPathBase = "/envdash/v1/notifications/"
+// URL template placeholders
+const (
+	CurrencyCodePlaceholder = "{cur}"
+	CapitalPlaceholder      = "{cap}"
+	ISOCodePlaceholder      = "{isoCode}"
+	LatPlaceholder          = "{lat}"
+	LngPlaceholder          = "{lng}"
+)
 
-const DashboardPath = "/envdash/v1/dashboard/{id}"
-const RestCountriesApiUrl = "http://129.241.150.113:8080/v3.1/alpha/"
-const OpenMeteoApiUrlBase = "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lng}&hourly=temperature_2m,precipitation"
-const OpenAQURLBase = "https://api.openaq.org/v3/locations?coordinates={lat},{lng}&radius=25000&parameters_id=1,2&iso={isoCode}&limit=100"
-const OSMURLBase = "https://nominatim.openstreetmap.org/search?city={cap}&countrycodes={isoCode}&format=jsonv2&addressdetails=1&limit=1"
-const OpenAQLatestURL = "https://api.openaq.org/v3/locations/{id}/latest"
-const CurrencyAPIURL = "https://api.exchangerate-api.com/v4/latest/{cur}"
+// Health check probe URLs
+const (
+	RestCountriesProbe = "http://129.241.150.113:8080/v3.1/alpha/NO"
+	CurrencyProbe      = "http://129.241.150.113:9090/currency/NOK/"
+	MeteoProbe         = "https://api.open-meteo.com/v1/forecast?latitude=0&longitude=0&current=temperature_2m"
+	OpenAQProbe        = "https://api.openaq.org/v3/parameters/2"
+	NominatimProbe     = "https://nominatim.openstreetmap.org/status.php?format=json"
+)
 
-const ContentType = "Content-Type"
-const ApplicationJSON = "application/json"
+// HTTP constants
+const (
+	ContentType     = "Content-Type"
+	ApplicationJSON = "application/json"
+)
 
-const APIKeysCollection = "apiKeys"
-const AuthPath = "/envdash/v1/auth/"
-const AuthPathKey = "/envdash/v1/auth/{key}"
-const APIKeyHeader = "Authorization"
-const BaseAPIKeyStarter = "sk-envdash-"
+// Authentication
+const (
+	APIKeyHeader      = "Authorization"
+	BaseAPIKeyStarter = "sk-envdash-"
+)
 
-const StatusPath = "/status/"
-const RestCountriesProbe = "http://129.241.150.113:8080/v3.1/alpha/NO"
-const CurrencyProbe = "http://129.241.150.113:9090/currency/NOK/"
-const MeteoProbe = "https://api.open-meteo.com/v1/forecast?latitude=0&longitude=0&current=temperature_2m"
-const OpenAQProbe = "https://api.openaq.org/v3/parameters/2"
-const NominatimProbe = "https://nominatim.openstreetmap.org/status.php?format=json"
-
+// Currency patch field names used in validation error messages
 const (
 	TargetCurrency       = "target currency"
 	AddTargetCurrency    = "add target currency"
 	RemoveTargetCurrency = "remove target currency"
 )
 
+// Validation lengths
 const (
-	IsoCodeLength      = 2
-	CurrencyCodeLength = 3
+	IsoCodeLength         = 2
+	CurrencyCodeLength    = 3
+	MinCountryCoordinates = 2
 )
 
+// Air quality thresholds (PM25 based on AQI breakpoints)
 const (
-	MinCountryCoordinates = 2
-
 	UnknownAirQualityValue = -1
 
 	Pm25GoodMax            = 12.0
@@ -55,7 +82,10 @@ const (
 	Pm25SensitiveGroupsMax = 55.4
 	Pm25UnhealthyMax       = 150.4
 	Pm25VeryUnhealthyMax   = 250.4
+)
 
+// Air quality level labels
+const (
 	AirQualityUnknown         = "unknown"
 	AirQualityGood            = "Good"
 	AirQualityModerate        = "Moderate"
