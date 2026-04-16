@@ -62,7 +62,7 @@ func (h *Handler) DashboardHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	country, err := fetchCountryInfo(reg.IsoCode)
+	country, err := h.API.GetCountry(ctx, reg.IsoCode)
 	if err != nil {
 		log.Printf("country fetch error for reg %s: %v", registrationID, err)
 		writeJSONError(w, http.StatusInternalServerError, "failed to fetch country information")
@@ -78,15 +78,13 @@ func (h *Handler) DashboardHandler(w http.ResponseWriter, r *http.Request) {
 
 	populateCountryFeatures(&resp, reg, country)
 
-	if err := populateWeatherFeatures(&resp, reg, country.Latlng[0], country.Latlng[1]); err != nil {
+	if err := h.populateWeatherFeatures(ctx, &resp, reg, country.Latlng[0], country.Latlng[1]); err != nil {
 		log.Printf("weather fetch failed for reg %s: %v", registrationID, err)
 	}
-
-	if err := populateAirQualityFeature(&resp, reg, country); err != nil {
+	if err := h.populateAirQualityFeature(ctx, &resp, reg, country); err != nil {
 		log.Printf("air quality fetch error for reg %s: %v", registrationID, err)
 	}
-
-	if err := populateExchangeRateFeature(&resp, reg, country); err != nil {
+	if err := h.populateExchangeRateFeature(ctx, &resp, reg, country); err != nil {
 		log.Printf("exchange rate fetch failed for reg %s: %v", registrationID, err)
 	}
 
@@ -131,12 +129,12 @@ func populateCountryFeatures(resp *utility.DashboardResponse, reg utility.Stored
 
 // populateWeatherFeatures fetches weather data and populates temperature and/or
 // precipitation on the dashboard response, if those features are enabled in the registration.
-func populateWeatherFeatures(resp *utility.DashboardResponse, reg utility.StoredRegistration, lat, lng float64) error {
+func (h *Handler) populateWeatherFeatures(ctx context.Context, resp *utility.DashboardResponse, reg utility.StoredRegistration, lat, lng float64) error {
 	if !reg.Features.Temperature && !reg.Features.Precipitation {
 		return nil
 	}
 
-	weather, err := fetchWeatherInfo(lat, lng)
+	weather, err := h.API.GetWeather(ctx, lat, lng)
 	if err != nil {
 		return err
 	}
@@ -157,7 +155,7 @@ func populateWeatherFeatures(resp *utility.DashboardResponse, reg utility.Stored
 // populateAirQualityFeature fetches air quality data for the country's capital and
 // populates PM2.5, PM10, and an air quality level string on the dashboard response.
 // Sets all values to -1 with level "unknown" if no capital is available.
-func populateAirQualityFeature(resp *utility.DashboardResponse, reg utility.StoredRegistration, country utility.RestCountryResponse) error {
+func (h *Handler) populateAirQualityFeature(ctx context.Context, resp *utility.DashboardResponse, reg utility.StoredRegistration, country utility.RestCountryResponse) error {
 	if !reg.Features.AirQuality {
 		return nil
 	}
@@ -171,7 +169,7 @@ func populateAirQualityFeature(resp *utility.DashboardResponse, reg utility.Stor
 		return nil
 	}
 
-	pm10, pm25, err := fetchAirQualityInfo(country.ISOCode, country.Capital[0])
+	pm10, pm25, err := h.API.GetAirQuality(ctx, country.ISOCode, country.Capital[0])
 	if err != nil {
 		return err
 	}
@@ -187,7 +185,7 @@ func populateAirQualityFeature(resp *utility.DashboardResponse, reg utility.Stor
 // populateExchangeRateFeature fetches exchange rates for the target currencies specified
 // in the registration, using the country's own currency as the base rate.
 // Skips fetching entirely if no target currencies are registered.
-func populateExchangeRateFeature(resp *utility.DashboardResponse, reg utility.StoredRegistration, country utility.RestCountryResponse) error {
+func (h *Handler) populateExchangeRateFeature(ctx context.Context, resp *utility.DashboardResponse, reg utility.StoredRegistration, country utility.RestCountryResponse) error {
 	if len(reg.Features.TargetCurrencies) == 0 {
 		return nil
 	}
@@ -198,7 +196,7 @@ func populateExchangeRateFeature(resp *utility.DashboardResponse, reg utility.St
 		break
 	}
 
-	currency, err := fetchExchangeRate(reg.Features.TargetCurrencies, baseCurrency)
+	currency, err := h.API.GetExchangeRates(ctx, baseCurrency, reg.Features.TargetCurrencies)
 	if err != nil {
 		return err
 	}
