@@ -36,7 +36,7 @@ func getRegistrationByID(ctx context.Context, client *firestore.Client, id strin
 func (h *Handler) DashboardHandler(w http.ResponseWriter, r *http.Request) {
 	registrationID := strings.TrimSpace(r.PathValue("id"))
 	if registrationID == "" {
-		writeJSONError(w, http.StatusBadRequest, "missing registration id")
+		utility.WriteJSONError(w, http.StatusBadRequest, "missing registration id")
 		return
 	}
 
@@ -45,24 +45,24 @@ func (h *Handler) DashboardHandler(w http.ResponseWriter, r *http.Request) {
 	reg, err := getRegistrationByID(ctx, h.Client, registrationID)
 	if err != nil {
 		log.Printf("registration %s not found: %v", registrationID, err)
-		writeJSONError(w, http.StatusNotFound, "registration not found")
+		utility.WriteJSONError(w, http.StatusNotFound, "registration not found")
 		return
 	}
 
 	if reg.IsoCode == "" {
-		writeJSONError(w, http.StatusInternalServerError, "registration missing isoCode")
+		utility.WriteJSONError(w, http.StatusInternalServerError, "registration missing isoCode")
 		return
 	}
 
 	country, err := h.API.GetCountry(ctx, reg.IsoCode)
 	if err != nil {
 		log.Printf("country fetch error for reg %s: %v", registrationID, err)
-		writeJSONError(w, http.StatusInternalServerError, "failed to fetch country information")
+		utility.WriteJSONError(w, http.StatusInternalServerError, "failed to fetch country information")
 		return
 	}
 
 	if len(country.Latlng) < utility.MinCountryCoordinates {
-		writeJSONError(w, http.StatusInternalServerError, "country coordinates unavailable")
+		utility.WriteJSONError(w, http.StatusInternalServerError, "country coordinates unavailable")
 		return
 	}
 
@@ -132,12 +132,12 @@ func (h *Handler) populateWeatherFeatures(ctx context.Context, resp *models.Dash
 	}
 
 	if reg.Features.Temperature {
-		temp := models.MeanValue(weather.Hourly.Temperature2M)
+		temp := utility.MeanValue(weather.Hourly.Temperature2M)
 		resp.Features.Temperature = &temp
 	}
 
 	if reg.Features.Precipitation {
-		precipitation := models.MeanValue(weather.Hourly.Precipitation)
+		precipitation := utility.MeanValue(weather.Hourly.Precipitation)
 		resp.Features.Precipitation = &precipitation
 	}
 
