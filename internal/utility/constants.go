@@ -37,6 +37,7 @@ const (
 // External API base URLs
 const (
 	RestCountriesAPIURL = "http://129.241.150.113:8080/v3.1/alpha/"
+	RestCountriesAPIURLName = "http://129.241.150.113:8080/v3.1/name/{name}"
 	OpenMeteoAPIURL     = "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lng}&hourly=temperature_2m,precipitation"
 	OpenAQURL           = "https://api.openaq.org/v3/locations?coordinates={lat},{lng}&radius=25000&limit=100"
 	OpenAQLatestURL     = "https://api.openaq.org/v3/locations/{id}/latest"
@@ -74,9 +75,10 @@ const (
 
 // Validation lengths
 const (
-	IsoCodeLength         = 2
-	CurrencyCodeLength    = 3
-	MinCountryCoordinates = 2
+	IsoCodeLength           = 2
+	CurrencyCodeLength      = 3
+	MinCountryCoordinates   = 2
+	RegistrationDocIDLength = 20
 )
 
 // Currency patch field names used in validation error messages
@@ -106,3 +108,5 @@ const (
 	AirQualityVeryUnhealthy   = "Very Unhealthy"
 	AirQualityHazardous       = "Hazardous"
 )
+
+const ApiCacheCollection = "cache"

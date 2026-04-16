@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"assignment-2/internal/clients"
 	"assignment-2/internal/models"
 	"assignment-2/internal/utility"
 	"context"
@@ -55,7 +54,7 @@ func (h *Handler) DashboardHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	country, err := clients.FetchCountryInfoFunc(reg.IsoCode)
+	country, err := h.API.GetCountry(ctx, reg.IsoCode)
 	if err != nil {
 		log.Printf("country fetch error for reg %s: %v", registrationID, err)
 		writeJSONError(w, http.StatusInternalServerError, "failed to fetch country information")
@@ -69,17 +68,15 @@ func (h *Handler) DashboardHandler(w http.ResponseWriter, r *http.Request) {
 
 	resp := newDashboardResponse(country)
 
-	populateCountryFeatures(&resp, reg, country)
+	h.populateCountryFeatures(&resp, reg, country)
 
-	if err := populateWeatherFeatures(&resp, reg, country.Latlng[0], country.Latlng[1]); err != nil {
+	if err := h.populateWeatherFeatures(ctx, &resp, reg, country.Latlng[0], country.Latlng[1]); err != nil {
 		log.Printf("weather fetch failed for reg %s: %v", registrationID, err)
 	}
-
-	if err := populateAirQualityFeature(&resp, reg, country); err != nil {
+	if err := h.populateAirQualityFeature(ctx, &resp, reg, country); err != nil {
 		log.Printf("air quality fetch error for reg %s: %v", registrationID, err)
 	}
-
-	if err := populateExchangeRateFeature(&resp, reg, country); err != nil {
+	if err := h.populateExchangeRateFeature(ctx, &resp, reg, country); err != nil {
 		log.Printf("exchange rate fetch failed for reg %s: %v", registrationID, err)
 	}
 
@@ -95,7 +92,7 @@ func (h *Handler) DashboardHandler(w http.ResponseWriter, r *http.Request) {
 
 // populateCountryFeatures fills in country-related fields on the dashboard response
 // based on which features are enabled in the registration.
-func populateCountryFeatures(resp *models.DashboardResponse, reg models.StoredRegistration, country models.RestCountryResponse) {
+func (h *Handler) populateCountryFeatures(resp *models.DashboardResponse, reg models.StoredRegistration, country models.RestCountryResponse) {
 	lat := country.Latlng[0]
 	lng := country.Latlng[1]
 
@@ -124,12 +121,12 @@ func populateCountryFeatures(resp *models.DashboardResponse, reg models.StoredRe
 
 // populateWeatherFeatures fetches weather data and populates temperature and/or
 // precipitation on the dashboard response, if those features are enabled in the registration.
-func populateWeatherFeatures(resp *models.DashboardResponse, reg models.StoredRegistration, lat, lng float64) error {
+func (h *Handler) populateWeatherFeatures(ctx context.Context, resp *models.DashboardResponse, reg models.StoredRegistration, lat, lng float64) error {
 	if !reg.Features.Temperature && !reg.Features.Precipitation {
 		return nil
 	}
 
-	weather, err := clients.FetchWeatherInfoFunc(lat, lng)
+	weather, err := h.API.GetWeather(ctx, lat, lng)
 	if err != nil {
 		return err
 	}
@@ -150,7 +147,7 @@ func populateWeatherFeatures(resp *models.DashboardResponse, reg models.StoredRe
 // populateAirQualityFeature fetches air quality data for the country's capital and
 // populates PM2.5, PM10, and an air quality level string on the dashboard response.
 // Sets all values to -1 with level "unknown" if no capital is available.
-func populateAirQualityFeature(resp *models.DashboardResponse, reg models.StoredRegistration, country models.RestCountryResponse) error {
+func (h *Handler) populateAirQualityFeature(ctx context.Context, resp *models.DashboardResponse, reg models.StoredRegistration, country models.RestCountryResponse) error {
 	if !reg.Features.AirQuality {
 		return nil
 	}
@@ -164,7 +161,7 @@ func populateAirQualityFeature(resp *models.DashboardResponse, reg models.Stored
 		return nil
 	}
 
-	pm10, pm25, err := clients.FetchAirQualityInfoFunc(country.ISOCode, country.Capital[0])
+	pm10, pm25, err := h.API.GetAirQuality(ctx, country.ISOCode, country.Capital[0])
 	if err != nil {
 		return err
 	}
@@ -180,7 +177,7 @@ func populateAirQualityFeature(resp *models.DashboardResponse, reg models.Stored
 // populateExchangeRateFeature fetches exchange rates for the target currencies specified
 // in the registration, using the country's own currency as the base rate.
 // Skips fetching entirely if no target currencies are registered.
-func populateExchangeRateFeature(resp *models.DashboardResponse, reg models.StoredRegistration, country models.RestCountryResponse) error {
+func (h *Handler) populateExchangeRateFeature(ctx context.Context, resp *models.DashboardResponse, reg models.StoredRegistration, country models.RestCountryResponse) error {
 	if len(reg.Features.TargetCurrencies) == 0 {
 		return nil
 	}
@@ -191,7 +188,7 @@ func populateExchangeRateFeature(resp *models.DashboardResponse, reg models.Stor
 		break
 	}
 
-	currency, err := clients.FetchExchangeRateFunc(reg.Features.TargetCurrencies, baseCurrency)
+	currency, err := h.API.GetExchangeRates(ctx, baseCurrency, reg.Features.TargetCurrencies)
 	if err != nil {
 		return err
 	}
@@ -219,16 +216,6 @@ func airQualityLevel(pm25 float64) string {
 	default:
 		return utility.AirQualityHazardous
 	}
-}
-
-// writeJSONError writes a JSON-encoded error response with the given HTTP status code
-// and message to the response writer.
-func writeJSONError(w http.ResponseWriter, status int, msg string) {
-	w.Header().Set(utility.ContentType, utility.ApplicationJSON)
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{
-		"error": msg,
-	})
 }
 
 // newDashboardResponse creates a new DashboardResponse initialised with the country
