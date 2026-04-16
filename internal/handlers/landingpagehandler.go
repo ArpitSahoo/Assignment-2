@@ -174,7 +174,7 @@ const landingHTML = `<!DOCTYPE html>
 
     <section>
       <h2>Quick Start</h2>
-      <p>Try it: <a href="/status/">/status/</a></p>
+      <p>Try it: <a href="/envdash/v1/status/">/status/</a></p>
     </section>
 
     <footer>
