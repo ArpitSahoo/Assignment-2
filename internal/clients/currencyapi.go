@@ -25,7 +25,7 @@ func fetchExchangeRate(targetCur []string, cur string) (map[string]float64, erro
 	}
 
 	curApiURL := strings.NewReplacer(
-		"{cur}", strings.ToUpper(cur),
+		utility.CurrencyCodePlaceholder, strings.ToUpper(cur),
 	).Replace(utility.CurrencyAPIURL)
 
 	resp, err := http.Get(curApiURL)
