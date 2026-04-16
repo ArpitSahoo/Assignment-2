@@ -80,7 +80,7 @@ func (h *Handler) HandleRegReq(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		h.deleteRegistration(w, r)
 	default:
-		writeJSONError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		utility.WriteJSONError(w, http.StatusMethodNotAllowed, "Method not allowed")
 	}
 }
 
@@ -123,7 +123,7 @@ func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log.Printf("Failed to add registration: %v", err)
-		writeJSONError(w, http.StatusInternalServerError, "failed to add registration")
+		utility.WriteJSONError(w, http.StatusInternalServerError, "failed to add registration")
 		return
 	}
 
@@ -171,7 +171,7 @@ func (h *Handler) handleAllGetRegistration(w http.ResponseWriter, r *http.Reques
 			return
 		}
 
-		writeJSONError(w, http.StatusBadRequest, "Invalid document ID, the document must be 20 characters")
+		utility.WriteJSONError(w, http.StatusBadRequest, "Invalid document ID, the document must be 20 characters")
 		return
 	}
 
@@ -202,14 +202,14 @@ func (h *Handler) GetAllRegistrations(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, "Error retrieving data")
+			utility.WriteJSONError(w, http.StatusInternalServerError, "Error retrieving data")
 			log.Printf("Failed to list registration documents: %v", err)
 			return
 		}
 
 		var reg models.StoredRegistration
 		if err := doc.DataTo(&reg); err != nil {
-			writeJSONError(w, http.StatusInternalServerError, "Failed to decode the registration document")
+			utility.WriteJSONError(w, http.StatusInternalServerError, "Failed to decode the registration document")
 			log.Printf("Failed to decode document: %v", err)
 			return
 		}
@@ -251,14 +251,14 @@ func (h *Handler) GetRegistrationByID(w http.ResponseWriter, r *http.Request, do
 
 	doc, err := h.Client.Collection(utility.RegistrationsCollection).Doc(docID).Get(ctx)
 	if err != nil {
-		writeJSONError(w, http.StatusNotFound, "The document was not found")
+		utility.WriteJSONError(w, http.StatusNotFound, "The document was not found")
 		log.Printf("Registration with ID %s not found: %v", docID, err)
 		return
 	}
 
 	var reg models.StoredRegistration
 	if err := doc.DataTo(&reg); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "Failed to decode the registration document")
+		utility.WriteJSONError(w, http.StatusInternalServerError, "Failed to decode the registration document")
 		log.Printf("Failed to decode document: %v", err)
 		return
 	}
@@ -280,7 +280,7 @@ func (h *Handler) replaceRegistration(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(r.PathValue("id"))
 	if id == "" {
 		log.Printf("invalid registration id: %q", id)
-		writeJSONError(w, http.StatusBadRequest, "invalid registration id")
+		utility.WriteJSONError(w, http.StatusBadRequest, "invalid registration id")
 		return
 	}
 
@@ -297,7 +297,7 @@ func (h *Handler) replaceRegistration(w http.ResponseWriter, r *http.Request) {
 	_, errGet := getRegistrationByIDFunc(ctx, h.Client, id)
 	if errGet != nil {
 		log.Printf("Failed to get registration: %v", errGet)
-		writeJSONError(w, http.StatusNotFound, "failed getting registration")
+		utility.WriteJSONError(w, http.StatusNotFound, "failed getting registration")
 		return
 	}
 
@@ -314,7 +314,7 @@ func (h *Handler) replaceRegistration(w http.ResponseWriter, r *http.Request) {
 	})
 	if errSet != nil {
 		log.Printf("Failed to update registration: %v", errSet)
-		writeJSONError(w, http.StatusInternalServerError, "failed updating registration")
+		utility.WriteJSONError(w, http.StatusInternalServerError, "failed updating registration")
 		return
 	}
 
@@ -335,7 +335,7 @@ func (h *Handler) partialUpdateRegistration(w http.ResponseWriter, r *http.Reque
 	id := strings.TrimSpace(r.PathValue("id"))
 	if id == "" {
 		log.Printf("invalid registration id: %q", id)
-		writeJSONError(w, http.StatusBadRequest, "invalid registration id")
+		utility.WriteJSONError(w, http.StatusBadRequest, "invalid registration id")
 		return
 	}
 
@@ -351,13 +351,13 @@ func (h *Handler) partialUpdateRegistration(w http.ResponseWriter, r *http.Reque
 	reg, errGet := getRegistrationByIDFunc(ctx, h.Client, id)
 	if errGet != nil {
 		log.Printf("Failed to get registration: %v", errGet)
-		writeJSONError(w, http.StatusNotFound, "failed getting registration")
+		utility.WriteJSONError(w, http.StatusNotFound, "failed getting registration")
 		return
 	}
 
 	if err := resolvePatchIdentity(ctx, &regReq); err != nil {
 		log.Printf("Failed to resolve patch identity: %v", err)
-		writeJSONError(w, http.StatusBadRequest, "failed resolving country or iso-code")
+		utility.WriteJSONError(w, http.StatusBadRequest, "failed resolving country or iso-code")
 		return
 	}
 
@@ -368,7 +368,7 @@ func (h *Handler) partialUpdateRegistration(w http.ResponseWriter, r *http.Reque
 	_, errSet := h.Client.Collection(utility.RegistrationsCollection).Doc(id).Update(ctx, update)
 	if errSet != nil {
 		log.Printf("Failed to update registration: %v", errSet)
-		writeJSONError(w, http.StatusInternalServerError, "failed updating registration")
+		utility.WriteJSONError(w, http.StatusInternalServerError, "failed updating registration")
 		return
 	}
 
@@ -393,7 +393,7 @@ func (h *Handler) deleteRegistration(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(r.PathValue("id"))
 	if id == "" {
 		log.Printf("invalid registration id: %q", id)
-		writeJSONError(w, http.StatusBadRequest, "invalid registration id")
+		utility.WriteJSONError(w, http.StatusBadRequest, "invalid registration id")
 		return
 	}
 
@@ -403,20 +403,20 @@ func (h *Handler) deleteRegistration(w http.ResponseWriter, r *http.Request) {
 	reg, errGet := getRegistrationByIDFunc(ctx, h.Client, id)
 	if errGet != nil {
 		log.Printf("Failed to get registration: %v", errGet)
-		writeJSONError(w, http.StatusNotFound, "failed getting registration")
+		utility.WriteJSONError(w, http.StatusNotFound, "failed getting registration")
 		return
 	}
 
 	if reg.IsoCode == "" {
 		log.Printf("missing isoCode for registration %q", id)
-		writeJSONError(w, http.StatusInternalServerError, "failed reading registration")
+		utility.WriteJSONError(w, http.StatusInternalServerError, "failed reading registration")
 		return
 	}
 
 	errDel := deleteRegistrationDoc(ctx, h.Client, id)
 	if errDel != nil {
 		log.Printf("Failed to delete registration: %v", errDel)
-		writeJSONError(w, http.StatusInternalServerError, "failed deleting registration")
+		utility.WriteJSONError(w, http.StatusInternalServerError, "failed deleting registration")
 		return
 	}
 	h.triggerLifecycleWebhooks(ctx, "DELETE", reg.IsoCode)
@@ -429,7 +429,7 @@ func (h *Handler) deleteRegistration(w http.ResponseWriter, r *http.Request) {
 func decodeRegReq(w http.ResponseWriter, r *http.Request, regReq *models.RegistrationRequest) bool {
 	if err := json.NewDecoder(r.Body).Decode(regReq); err != nil {
 		log.Printf("Failed to decode registration request: %v", err)
-		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
+		utility.WriteJSONError(w, http.StatusBadRequest, "invalid json payload")
 		return true
 	}
 	return false
@@ -465,7 +465,7 @@ func resolveRegReqIdentity(w http.ResponseWriter, ctx context.Context, regReq mo
 	country, isoCode, errResolve := resolveRegistrationIdentity(ctx, regReq)
 	if errResolve != nil {
 		log.Printf("Failed to resolve registration identity: %v", errResolve)
-		writeJSONError(w, http.StatusBadRequest, "failed resolving country or iso-code")
+		utility.WriteJSONError(w, http.StatusBadRequest, "failed resolving country or iso-code")
 		return "", "", true
 	}
 	return country, isoCode, false
@@ -506,21 +506,21 @@ func resolveRegistrationIdentity(ctx context.Context, regReq models.Registration
 func validateRegReq(w http.ResponseWriter, regReq models.RegistrationRequest) bool {
 	if regReq.Country == "" && regReq.IsoCode == "" {
 		log.Printf("invalid registration request: both country and isoCode are blank")
-		writeJSONError(w, http.StatusBadRequest, "country or iso-code must be provided")
+		utility.WriteJSONError(w, http.StatusBadRequest, "country or iso-code must be provided")
 		return true
 	}
 
 	if regReq.IsoCode != "" {
 		if len(regReq.IsoCode) != utility.IsoCodeLength {
 			log.Printf("invalid isoCode: %q", regReq.IsoCode)
-			writeJSONError(w, http.StatusBadRequest, "iso-code must be 2-letter country code")
+			utility.WriteJSONError(w, http.StatusBadRequest, "iso-code must be 2-letter country code")
 			return true
 		}
 
 		for _, l := range regReq.IsoCode {
 			if !unicode.IsLetter(l) {
 				log.Printf("Invalid isoCode: %q", l)
-				writeJSONError(w, http.StatusBadRequest, "iso-code must contain only letters")
+				utility.WriteJSONError(w, http.StatusBadRequest, "iso-code must contain only letters")
 				return true
 			}
 		}
@@ -534,7 +534,7 @@ func validateRegReq(w http.ResponseWriter, regReq models.RegistrationRequest) bo
 				c != '\'' &&
 				c != '’' {
 				log.Printf("Invalid country: %q", c)
-				writeJSONError(w, http.StatusBadRequest, "country must contain only letters")
+				utility.WriteJSONError(w, http.StatusBadRequest, "country must contain only letters")
 				return true
 			}
 		}
@@ -543,13 +543,13 @@ func validateRegReq(w http.ResponseWriter, regReq models.RegistrationRequest) bo
 	for _, f := range regReq.Features.TargetCurrencies {
 		if len(f) != utility.CurrencyCodeLength {
 			log.Printf("Invalid currency length: %q", f)
-			writeJSONError(w, http.StatusBadRequest, "target currency must be 3-letter ISO-code")
+			utility.WriteJSONError(w, http.StatusBadRequest, "target currency must be 3-letter ISO-code")
 			return true
 		}
 		for _, l := range f {
 			if !unicode.IsLetter(l) {
 				log.Printf("Invalid currency code: %q contains invalid character %q", f, l)
-				writeJSONError(w, http.StatusBadRequest, "target currency must contain only letters")
+				utility.WriteJSONError(w, http.StatusBadRequest, "target currency must contain only letters")
 				return true
 			}
 		}
@@ -631,7 +631,7 @@ func resolvePatchIdentity(ctx context.Context, patch *models.RegistrationPatchRe
 func decodePatchRegReq(w http.ResponseWriter, r *http.Request, regReq *models.RegistrationPatchRequest) bool {
 	if err := json.NewDecoder(r.Body).Decode(regReq); err != nil {
 		log.Printf("Failed to decode patch request: %v", err)
-		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
+		utility.WriteJSONError(w, http.StatusBadRequest, "invalid json payload")
 		return true
 	}
 	return false
@@ -664,13 +664,13 @@ func validatePatchRegReq(w http.ResponseWriter, regReq models.RegistrationPatchR
 	if regReq.IsoCode != nil {
 		if len(*regReq.IsoCode) != utility.IsoCodeLength {
 			log.Printf("Invalid isoCode: %q", *regReq.IsoCode)
-			writeJSONError(w, http.StatusBadRequest, "iso-code must be 2-letter country code")
+			utility.WriteJSONError(w, http.StatusBadRequest, "iso-code must be 2-letter country code")
 			return true
 		}
 		for _, l := range *regReq.IsoCode {
 			if !unicode.IsLetter(l) {
 				log.Printf("Invalid isoCode: %q", l)
-				writeJSONError(w, http.StatusBadRequest, "iso-code must contain only letters")
+				utility.WriteJSONError(w, http.StatusBadRequest, "iso-code must contain only letters")
 				return true
 			}
 		}
@@ -679,7 +679,7 @@ func validatePatchRegReq(w http.ResponseWriter, regReq models.RegistrationPatchR
 	if regReq.Country != nil {
 		if *regReq.Country == "" {
 			log.Printf("invalid country: %q", *regReq.Country)
-			writeJSONError(w, http.StatusBadRequest, "country cannot be blank")
+			utility.WriteJSONError(w, http.StatusBadRequest, "country cannot be blank")
 			return true
 		}
 		for _, c := range *regReq.Country {
@@ -689,7 +689,7 @@ func validatePatchRegReq(w http.ResponseWriter, regReq models.RegistrationPatchR
 				c != '\'' &&
 				c != '’' {
 				log.Printf("Invalid country: %q", c)
-				writeJSONError(w, http.StatusBadRequest, "country must contain only letters")
+				utility.WriteJSONError(w, http.StatusBadRequest, "country must contain only letters")
 				return true
 			}
 		}
@@ -701,13 +701,13 @@ func validatePatchRegReq(w http.ResponseWriter, regReq models.RegistrationPatchR
 
 		if f.TargetCurrencies != nil && (f.AddTargetCurrencies != nil || f.RemoveTargetCurrencies != nil) {
 			log.Printf("Invalid target currencies: %q", f.TargetCurrencies)
-			writeJSONError(w, http.StatusBadRequest, "target currencies cannot be replaced and added/removed in the same request")
+			utility.WriteJSONError(w, http.StatusBadRequest, "target currencies cannot be replaced and added/removed in the same request")
 			return true
 		}
 
 		if f.AddTargetCurrencies != nil && f.RemoveTargetCurrencies != nil {
 			log.Printf("Invalid target currencies: %q", f.RemoveTargetCurrencies)
-			writeJSONError(w, http.StatusBadRequest, "target currencies cannot be added and removed in the same request")
+			utility.WriteJSONError(w, http.StatusBadRequest, "target currencies cannot be added and removed in the same request")
 			return true
 		}
 
@@ -766,13 +766,13 @@ func validateCurrencyList(w http.ResponseWriter, currencies *[]string, fieldName
 	for _, curr := range *currencies {
 		if len(curr) != utility.CurrencyCodeLength {
 			log.Printf("Invalid currency length: %q", curr)
-			writeJSONError(w, http.StatusBadRequest, fieldName+" must be 3-letter ISO-code")
+			utility.WriteJSONError(w, http.StatusBadRequest, fieldName+" must be 3-letter ISO-code")
 			return true
 		}
 		for _, l := range curr {
 			if !unicode.IsLetter(l) {
 				log.Printf("Invalid currency code: %q contains invalid character %q", curr, l)
-				writeJSONError(w, http.StatusBadRequest, fieldName+" must contain only letters")
+				utility.WriteJSONError(w, http.StatusBadRequest, fieldName+" must contain only letters")
 				return true
 			}
 		}
