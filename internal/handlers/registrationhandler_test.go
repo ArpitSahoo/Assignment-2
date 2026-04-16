@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"assignment-2/internal/clients"
 	"assignment-2/internal/models"
 	"assignment-2/internal/utility"
 	"bytes"
@@ -80,6 +81,260 @@ func TestBuildCurrencyPatchUpdateNilFeatures(t *testing.T) {
 func TestBuildCurrencyPatchUpdateEmptyFeatures(t *testing.T) {
 	got := buildCurrencyPatchUpdate(&models.RegistrationPatchFeatures{})
 	assert.Nil(t, got)
+}
+
+func TestResolveRegistrationIdentity_TableDriven(t *testing.T) {
+	origByCode := clients.FetchCountryInfoFunc
+	origByName := clients.FetchCountryByNameFunc
+	defer func() {
+		clients.FetchCountryInfoFunc = origByCode
+		clients.FetchCountryByNameFunc = origByName
+	}()
+
+	tests := []struct {
+		name        string
+		req         models.RegistrationRequest
+		stubByCode  models.RestCountryResponse
+		stubByName  models.RestCountryResponse
+		stubCodeErr error
+		stubNameErr error
+		wantCountry string
+		wantISOCode string
+		wantErr     bool
+	}{
+		{
+			name: "both country and isoCode provided",
+			req: models.RegistrationRequest{
+				Country: "Norway",
+				IsoCode: "NO",
+			},
+			wantCountry: "Norway",
+			wantISOCode: "NO",
+			wantErr:     false,
+		},
+		{
+			name: "only isoCode provided",
+			req: models.RegistrationRequest{
+				Country: "",
+				IsoCode: "NO",
+			},
+			stubByCode: models.RestCountryResponse{
+				ISOCode: "NO",
+				Name: struct {
+					Common string `json:"common"`
+				}{
+					Common: "Norway",
+				},
+			},
+			wantCountry: "Norway",
+			wantISOCode: "NO",
+			wantErr:     false,
+		},
+		{
+			name: "only country provided",
+			req: models.RegistrationRequest{
+				Country: "Norway",
+				IsoCode: "",
+			},
+			stubByName: models.RestCountryResponse{
+				ISOCode: "NO",
+				Name: struct {
+					Common string `json:"common"`
+				}{
+					Common: "Norway",
+				},
+			},
+			wantCountry: "Norway",
+			wantISOCode: "NO",
+			wantErr:     false,
+		},
+		{
+			name: "both blank",
+			req: models.RegistrationRequest{
+				Country: "",
+				IsoCode: "",
+			},
+			wantCountry: "",
+			wantISOCode: "",
+			wantErr:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+
+			clients.FetchCountryInfoFunc = func(ctx context.Context, isoCode string) (models.RestCountryResponse, error) {
+				return tt.stubByCode, tt.stubCodeErr
+			}
+
+			clients.FetchCountryByNameFunc = func(ctx context.Context, country string) (models.RestCountryResponse, error) {
+				return tt.stubByName, tt.stubNameErr
+			}
+
+			gotCountry, gotISOCode, gotErr := resolveRegistrationIdentity(ctx, tt.req)
+
+			if tt.wantErr {
+				require.Error(t, gotErr)
+			} else {
+				require.NoError(t, gotErr)
+			}
+
+			assert.Equal(t, tt.wantCountry, gotCountry)
+			assert.Equal(t, tt.wantISOCode, gotISOCode)
+		})
+	}
+}
+
+func TestResolveRegReqIdentity(t *testing.T) {
+	origByCode := clients.FetchCountryInfoFunc
+	origByName := clients.FetchCountryByNameFunc
+	defer func() {
+		clients.FetchCountryInfoFunc = origByCode
+		clients.FetchCountryByNameFunc = origByName
+	}()
+
+	t.Run("success", func(t *testing.T) {
+		ctx := context.Background()
+
+		clients.FetchCountryInfoFunc = func(ctx context.Context, isoCode string) (models.RestCountryResponse, error) {
+			return models.RestCountryResponse{
+				ISOCode: "NO",
+				Name: struct {
+					Common string `json:"common"`
+				}{
+					Common: "Norway",
+				},
+			}, nil
+		}
+		req := models.RegistrationRequest{
+			Country: "",
+			IsoCode: "NO",
+		}
+		w := httptest.NewRecorder()
+
+		gotCountry, gotISOCode, failed := resolveRegReqIdentity(w, ctx, req)
+
+		assert.False(t, failed)
+		assert.Equal(t, "Norway", gotCountry)
+		assert.Equal(t, "NO", gotISOCode)
+	})
+
+	t.Run("failure writes json error", func(t *testing.T) {
+		ctx := context.Background()
+
+		req := models.RegistrationRequest{
+			Country: "",
+			IsoCode: "",
+		}
+
+		w := httptest.NewRecorder()
+		gotCountry, gotISOCode, failed := resolveRegReqIdentity(w, ctx, req)
+
+		assert.True(t, failed)
+		assert.Equal(t, "", gotCountry)
+		assert.Equal(t, "", gotISOCode)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+
+		var got map[string]string
+		err := json.NewDecoder(w.Body).Decode(&got)
+		require.NoError(t, err)
+		assert.Equal(t, "failed resolving country or iso-code", got["error"])
+	})
+
+	t.Run("failure when iso lookup fails", func(t *testing.T) {
+		ctx := context.Background()
+
+		clients.FetchCountryInfoFunc = func(ctx context.Context, isoCode string) (models.RestCountryResponse, error) {
+			return models.RestCountryResponse{}, errors.New("lookup failed")
+		}
+
+		req := models.RegistrationRequest{
+			Country: "",
+			IsoCode: "NO",
+		}
+
+		w := httptest.NewRecorder()
+		gotCountry, gotISOCode, failed := resolveRegReqIdentity(w, ctx, req)
+
+		assert.True(t, failed)
+		assert.Equal(t, "", gotCountry)
+		assert.Equal(t, "", gotISOCode)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+
+		var got map[string]string
+		err := json.NewDecoder(w.Body).Decode(&got)
+		require.NoError(t, err)
+		assert.Equal(t, "failed resolving country or iso-code", got["error"])
+	})
+	t.Run("failure when country lookup fails", func(t *testing.T) {
+		ctx := context.Background()
+
+		clients.FetchCountryByNameFunc = func(ctx context.Context, country string) (models.RestCountryResponse, error) {
+			return models.RestCountryResponse{}, errors.New("lookup failed")
+		}
+
+		req := models.RegistrationRequest{
+			Country: "Norway",
+			IsoCode: "",
+		}
+
+		w := httptest.NewRecorder()
+		gotCountry, gotISOCode, failed := resolveRegReqIdentity(w, ctx, req)
+
+		assert.True(t, failed)
+		assert.Equal(t, "", gotCountry)
+		assert.Equal(t, "", gotISOCode)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+
+		var got map[string]string
+		err := json.NewDecoder(w.Body).Decode(&got)
+		require.NoError(t, err)
+		assert.Equal(t, "failed resolving country or iso-code", got["error"])
+	})
+}
+
+func TestAddRegistrationResolvesMissingIdentitySuccess(t *testing.T) {
+	origByName := clients.FetchCountryByNameFunc
+	defer func() {
+		clients.FetchCountryByNameFunc = origByName
+	}()
+
+	clients.FetchCountryByNameFunc = func(ctx context.Context, country string) (models.RestCountryResponse, error) {
+		return models.RestCountryResponse{
+			ISOCode: "NO",
+			Name: struct {
+				Common string `json:"common"`
+			}{
+				Common: "Norway",
+			},
+		}, nil
+	}
+
+	h := newTestRegistrationHandler(t)
+	ctx := context.Background()
+
+	body := `{
+		"country": "Norway",
+		"features": {}
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, utility.RegistrationPath, bytes.NewBufferString(body))
+	req.Header.Set(utility.ContentType, utility.ApplicationJSON)
+
+	rr := httptest.NewRecorder()
+	h.addRegistration(rr, req)
+
+	assert.Equal(t, http.StatusCreated, rr.Code)
+
+	// Read back the created registration.
+	docs, err := h.Client.Collection(utility.RegistrationsCollection).Documents(ctx).GetAll()
+	require.NoError(t, err)
+	require.Len(t, docs, 1)
+
+	got := docs[0].Data()
+	assert.Equal(t, "Norway", got["country"])
+	assert.Equal(t, "NO", got["isoCode"])
 }
 
 func TestAddRegistrationWithPartialUpdateRegistrationSuccess_TableDriven(t *testing.T) {
@@ -1128,6 +1383,32 @@ func TestPartialUpdateRegistrationInvalidJSON_TableDriven(t *testing.T) {
 		})
 	}
 }
+func TestAddRegistrationResolveRegReqIdentityFailure(t *testing.T) {
+	origByName := clients.FetchCountryByNameFunc
+	defer func() {
+		clients.FetchCountryByNameFunc = origByName
+	}()
+
+	clients.FetchCountryByNameFunc = func(ctx context.Context, country string) (models.RestCountryResponse, error) {
+		return models.RestCountryResponse{}, errors.New("lookup failed")
+	}
+
+	h := newTestRegistrationHandler(t)
+
+	body := `{
+		"country": "Norway",
+		"features": {}
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, utility.RegistrationPath, bytes.NewBufferString(body))
+	req.Header.Set(utility.ContentType, utility.ApplicationJSON)
+
+	rr := httptest.NewRecorder()
+	h.addRegistration(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.Contains(t, rr.Body.String(), "failed resolving country or iso-code")
+}
 
 func TestPartialUpdateRegistrationValidationFailure_TableDriven(t *testing.T) {
 	tests := []struct {
@@ -1630,7 +1911,6 @@ func TestPartialUpdateRegistrationValidationFailure_TableDriven(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestPartialUpdateRegistrationHandlerFailure_TableDriven(t *testing.T) {
@@ -1710,7 +1990,165 @@ func TestPartialUpdateRegistrationHandlerFailure_TableDriven(t *testing.T) {
 	}
 }
 
-func TestHandleAllGetRegistrations(t *testing.T) {
+func TestPartialUpdateRegistrationResolvePatchIdentityFailure(t *testing.T) {
+	origByName := clients.FetchCountryByNameFunc
+	defer func() {
+		clients.FetchCountryByNameFunc = origByName
+	}()
+
+	clients.FetchCountryByNameFunc = func(ctx context.Context, country string) (models.RestCountryResponse, error) {
+		return models.RestCountryResponse{}, errors.New("lookup failed")
+	}
+
+	h := newTestRegistrationHandler(t)
+	ctx := context.Background()
+
+	_, err := h.Client.Collection(utility.RegistrationsCollection).Doc("reg-patch-001").Set(ctx, map[string]any{
+		"country": "Sweden",
+		"isoCode": "SE",
+		"features": map[string]any{
+			"temperature":   false,
+			"precipitation": false,
+			"capital":       false,
+		},
+		"lastChange": "2026-04-16T00:00:00Z",
+	})
+	require.NoError(t, err)
+
+	body := `{
+		"country": "Norway"
+	}`
+
+	req := httptest.NewRequest(http.MethodPatch, utility.RegistrationPathID+"reg-patch-001", bytes.NewBufferString(body))
+	req.SetPathValue("id", "reg-patch-001")
+	req.Header.Set(utility.ContentType, utility.ApplicationJSON)
+
+	rr := httptest.NewRecorder()
+	h.partialUpdateRegistration(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.Contains(t, rr.Body.String(), "failed resolving country or iso-code")
+}
+
+func TestResolvePatchIdentity_TableDriven(t *testing.T) {
+	origByCode := clients.FetchCountryInfoFunc
+	origByName := clients.FetchCountryByNameFunc
+	defer func() {
+		clients.FetchCountryInfoFunc = origByCode
+		clients.FetchCountryByNameFunc = origByName
+	}()
+
+	tests := []struct {
+		name        string
+		patch       models.RegistrationPatchRequest
+		stubByCode  models.RestCountryResponse
+		stubByName  models.RestCountryResponse
+		stubCodeErr error
+		stubNameErr error
+		wantCountry *string
+		wantISOCode *string
+		wantErr     bool
+	}{
+		{
+			name:        "both blank",
+			patch:       models.RegistrationPatchRequest{},
+			wantCountry: nil,
+			wantISOCode: nil,
+			wantErr:     false,
+		},
+		{
+			name: "both provided unchanged",
+			patch: models.RegistrationPatchRequest{
+				Country: firestore.Ptr("Norway"),
+				IsoCode: firestore.Ptr("NO"),
+			},
+			wantCountry: firestore.Ptr("Norway"),
+			wantISOCode: firestore.Ptr("NO"),
+			wantErr:     false,
+		},
+		{
+			name: "only isoCode resolves country",
+			patch: models.RegistrationPatchRequest{
+				IsoCode: firestore.Ptr("NO"),
+			},
+			stubByCode: models.RestCountryResponse{
+				ISOCode: "NO",
+				Name: struct {
+					Common string `json:"common"`
+				}{
+					Common: "Norway",
+				},
+			},
+			wantCountry: firestore.Ptr("Norway"),
+			wantISOCode: firestore.Ptr("NO"),
+			wantErr:     false,
+		},
+		{
+			name: "only country resolves isoCode",
+			patch: models.RegistrationPatchRequest{
+				Country: firestore.Ptr("Norway"),
+			},
+			stubByName: models.RestCountryResponse{
+				ISOCode: "NO",
+				Name: struct {
+					Common string `json:"common"`
+				}{
+					Common: "Norway",
+				},
+			},
+			wantCountry: firestore.Ptr("Norway"),
+			wantISOCode: firestore.Ptr("NO"),
+			wantErr:     false,
+		},
+		{
+			name: "isoCode lookup failure",
+			patch: models.RegistrationPatchRequest{
+				IsoCode: firestore.Ptr("NO"),
+			},
+			stubCodeErr: errors.New("lookup failed"),
+			wantCountry: nil,
+			wantISOCode: firestore.Ptr("NO"),
+			wantErr:     true,
+		},
+		{
+			name: "only country provided and lookup by name fails",
+			patch: models.RegistrationPatchRequest{
+				Country: firestore.Ptr("Norway"),
+			},
+			stubNameErr: errors.New("lookup failed"),
+			wantCountry: firestore.Ptr("Norway"),
+			wantISOCode: nil,
+			wantErr:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+
+			clients.FetchCountryInfoFunc = func(ctx context.Context, isoCode string) (models.RestCountryResponse, error) {
+				return tt.stubByCode, tt.stubCodeErr
+			}
+			clients.FetchCountryByNameFunc = func(ctx context.Context, country string) (models.RestCountryResponse, error) {
+				return tt.stubByName, tt.stubNameErr
+			}
+
+			patch := tt.patch
+			err := resolvePatchIdentity(ctx, &patch)
+
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+
+			assert.Equal(t, tt.wantCountry, patch.Country)
+			assert.Equal(t, tt.wantISOCode, patch.IsoCode)
+		})
+	}
+}
+
+func TestHandleAllGetRegistrationsSuccess(t *testing.T) {
 	handler := &Handler{}
 	req := httptest.NewRequest(http.MethodHead, "/envdash/v1/registrations", nil)
 	w := httptest.NewRecorder()
@@ -1720,17 +2158,146 @@ func TestHandleAllGetRegistrations(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("handler returned wrong status code: got %d want %d", w.Code, http.StatusOK)
 	}
-
 }
 
-func TestHandleAllGetRegistrationInvalidDocIDLength(t *testing.T) {
+func TestHandleAllGetRegistrationHeadValidDocIDExists(t *testing.T) {
+	origin := getRegistrationDoc
+	getRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
+		return nil
+	}
+	defer func() {
+		getRegistrationDoc = origin
+	}()
+
 	h := &Handler{}
 
-	req := httptest.NewRequest(http.MethodGet, "/envdash/v1/registrations/{id}", nil)
-	req.SetPathValue("id", "short-id") // len != 20
+	req := httptest.NewRequest(http.MethodHead, "/envdash/v1/registrations/{id}", nil)
+	req.SetPathValue("id", "12345678901234567890")
 	w := httptest.NewRecorder()
 
 	h.handleAllGetRegistration(w, req)
+
+	resp := w.Result()
+	defer func(body io.ReadCloser) {
+		err := body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "", w.Body.String())
+}
+
+func TestHandleAllGetRegistrationsGetNoIDCallsGetAllSuccess(t *testing.T) {
+	clearFirestoreEmulator(t)
+
+	ctx := context.Background()
+
+	client, err := firestore.NewClient(ctx, "test-project")
+	require.NoError(t, err)
+	defer func(client *firestore.Client) {
+		err := client.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(client)
+
+	_, _, err = client.Collection(utility.RegistrationsCollection).Add(ctx, map[string]any{
+		"country": "Norway",
+		"isoCode": "NO",
+		"features": map[string]any{
+			"temperature": true,
+		},
+		"lastChange": "2026-01-01T00:00:00Z",
+	})
+	require.NoError(t, err)
+
+	h := &Handler{Client: client}
+
+	req := httptest.NewRequest(http.MethodGet, "/envdash/v1/registrations", nil)
+	w := httptest.NewRecorder()
+
+	h.handleAllGetRegistration(w, req)
+
+	resp := w.Result()
+
+	defer func(body io.ReadCloser) {
+		err := body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, utility.ApplicationJSON, resp.Header.Get(utility.ContentType))
+
+	var got []models.StoredRegistration
+	err = json.NewDecoder(resp.Body).Decode(&got)
+	require.NoError(t, err)
+
+	assert.Len(t, got, 1)
+	assert.Equal(t, "Norway", got[0].Country)
+	assert.Equal(t, "NO", got[0].IsoCode)
+}
+
+func TestHandleAllGetRegistrationsHeadInvalidDocIDLength(t *testing.T) {
+	h := &Handler{}
+
+	req := httptest.NewRequest(http.MethodHead, "/envdash/v1/registrations/{id}", nil)
+	req.SetPathValue("id", "short-id")
+	w := httptest.NewRecorder()
+
+	h.handleAllGetRegistration(w, req)
+
+	resp := w.Result()
+	defer func(body io.ReadCloser) {
+		err := body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Equal(t, "", w.Body.String())
+}
+
+func TestHandleAllGetRegistrationHeadValidDocIDNotFound(t *testing.T) {
+	origin := getRegistrationDoc
+	getRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
+		return errors.New("not found")
+	}
+	defer func() {
+		getRegistrationDoc = origin
+	}()
+
+	h := &Handler{}
+
+	req := httptest.NewRequest(http.MethodHead, "/envdash/v1/registrations/{id}", nil)
+	req.SetPathValue("id", "12345678901234567890")
+	w := httptest.NewRecorder()
+
+	h.handleAllGetRegistration(w, req)
+
+	resp := w.Result()
+	defer func(body io.ReadCloser) {
+		err := body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, "", w.Body.String())
+}
+
+func TestHandleRegReqHeadRoutingSuccess(t *testing.T) {
+	h := &Handler{}
+
+	req := httptest.NewRequest(http.MethodHead, utility.RegistrationPath, nil)
+	w := httptest.NewRecorder()
+
+	h.HandleRegReq(w, req)
 
 	resp := w.Result()
 	defer func(Body io.ReadCloser) {
@@ -1740,45 +2307,9 @@ func TestHandleAllGetRegistrationInvalidDocIDLength(t *testing.T) {
 		}
 	}(resp.Body)
 
-	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-	assert.Equal(t, "text/plain; charset=utf-8", resp.Header.Get("Content-Type"))
-}
-
-/*
-func TestHandleAllGetRegistrationGetNoIDCallsGetAll(t *testing.T) {
-	origin := listRegistrationDocs
-	listRegistrationDocs = func(ctx context.Context, client *firestore.Client) ([]map[string]interface{}, error) {
-		return []map[string]interface{}{
-			{"country": "Norway", "isoCode": "NO"},
-		}, nil
-	}
-	t.Cleanup(func() { listRegistrationDocs = origin })
-
-	h := &Handler{}
-	req := httptest.NewRequest(http.MethodGet, "/envdash/v1/registrations", nil)
-	w := httptest.NewRecorder()
-
-	h.handleAllGetRegistration(w, req)
-
-	resp := w.Result()
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			t.Fatal(t)
-		}
-	}(resp.Body)
-
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
-
-	var got []map[string]interface{}
-	err := json.NewDecoder(resp.Body).Decode(&got)
-	assert.NoError(t, err)
-	assert.Len(t, got, 1)
-	assert.Equal(t, "Norway", got[0]["country"])
+	assert.Equal(t, "", w.Body.String())
 }
-
-*/
 
 func TestHandleRegReqGetInvalidDocIDLength(t *testing.T) {
 	h := &Handler{}
@@ -1841,7 +2372,7 @@ func TestHandleAllGetRegistrationHeadWhitespaceIDStatusOK(t *testing.T) {
 	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
 }
 
-func TestGetAllRegistrations(t *testing.T) {
+func TestGetAllRegistrationsSuccess(t *testing.T) {
 	clearFirestoreEmulator(t)
 
 	ctx := context.Background()
@@ -1877,6 +2408,116 @@ func TestGetAllRegistrations(t *testing.T) {
 	}(resp.Body)
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func TestGetAllRegistrationsEmptySuccess(t *testing.T) {
+	clearFirestoreEmulator(t)
+
+	ctx := context.Background()
+
+	client, err := firestore.NewClient(ctx, "test-project")
+	require.NoError(t, err)
+	defer func(client *firestore.Client) {
+		err := client.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(client)
+
+	h := &Handler{Client: client}
+
+	req := httptest.NewRequest(http.MethodGet, "/registrations", nil)
+	w := httptest.NewRecorder()
+
+	h.GetAllRegistrations(w, req)
+
+	resp := w.Result()
+	defer func(body io.ReadCloser) {
+		err := body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var got []map[string]any
+	err = json.NewDecoder(resp.Body).Decode(&got)
+	require.NoError(t, err)
+
+	assert.Len(t, got, 0)
+}
+
+func TestGetAllRegistrationsRetrieveFailure(t *testing.T) {
+	clearFirestoreEmulator(t)
+
+	ctx := context.Background()
+
+	client, err := firestore.NewClient(ctx, "test-project")
+	require.NoError(t, err)
+
+	err = client.Close()
+	require.NoError(t, err)
+
+	h := &Handler{Client: client}
+
+	req := httptest.NewRequest(http.MethodGet, "/registrations", nil)
+	w := httptest.NewRecorder()
+
+	h.GetAllRegistrations(w, req)
+
+	resp := w.Result()
+	defer func(body io.ReadCloser) {
+		err := body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
+
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+}
+
+func TestGetAllRegistrationsDecodeFailure(t *testing.T) {
+	clearFirestoreEmulator(t)
+	ctx := context.Background()
+
+	client, err := firestore.NewClient(ctx, "test-project")
+	require.NoError(t, err)
+
+	defer func(client *firestore.Client) {
+		err := client.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(client)
+
+	_, _, err = client.Collection(utility.RegistrationsCollection).Add(ctx, map[string]any{
+		"country": "Norway",
+		"isoCode": 123,
+		"features": map[string]any{
+			"temperature": true,
+		},
+		"lastChange": "2026-01-01T00:00:00Z",
+	})
+	require.NoError(t, err)
+
+	h := &Handler{Client: client}
+
+	req := httptest.NewRequest(http.MethodGet, "/registrations", nil)
+	w := httptest.NewRecorder()
+
+	h.GetAllRegistrations(w, req)
+
+	resp := w.Result()
+
+	defer func(body io.ReadCloser) {
+		err := body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
+
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 }
 
 func TestGetRegistrationByID_Success(t *testing.T) {
@@ -1971,6 +2612,49 @@ func TestGetRegistrationByID_NotFound(t *testing.T) {
 	}(resp.Body)
 
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestGetRegistrationByIDDecodeFailure(t *testing.T) {
+	clearFirestoreEmulator(t)
+
+	ctx := context.Background()
+
+	client, err := firestore.NewClient(ctx, "test-project")
+	require.NoError(t, err)
+	defer func(client *firestore.Client) {
+		err := client.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(client)
+
+	docRef, _, err := client.Collection(utility.RegistrationsCollection).Add(ctx, map[string]any{
+		"country": "Norway",
+		"isoCode": 123,
+		"features": map[string]any{
+			"temperature": true,
+		},
+		"lastChange": "2026-01-01T00:00:00Z",
+	})
+	require.NoError(t, err)
+
+	h := &Handler{Client: client}
+
+	req := httptest.NewRequest(http.MethodGet, "/registrations/"+docRef.ID, nil)
+
+	w := httptest.NewRecorder()
+
+	h.GetRegistrationByID(w, req, docRef.ID)
+
+	resp := w.Result()
+	defer func(body io.ReadCloser) {
+		err := body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
+
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 }
 
 func TestHandleHeadDocIDNotFoundReturns404(t *testing.T) {
@@ -2384,44 +3068,6 @@ func TestAddRegistrationInvalidIso1(t *testing.T) {
 
 func TestAddRegistrationInvalidIso2(t *testing.T) {
 	h := &Handler{}
-	// ISO-code blank
-	body := `{
-   		"country": "Norway",
-   		"isoCode": "",
-   		"features": {
-      		"temperature": true,
-      		"precipitation": true,
-      		"airQuality": true,
-      		"capital": true,
-      		"coordinates": true,
-      		"population": true,
-      		"area": true,
-      		"targetCurrencies": ["EUR", "USD", "SEK"]
-		}
-	}`
-
-	req := httptest.NewRequest(http.MethodPost, "/envdash/v1/registrations", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	before := h.RegistrationCount.Load()
-
-	h.addRegistration(w, req)
-
-	after := h.RegistrationCount.Load()
-	resp := w.Result()
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			t.Fatal(err)
-		}
-	}(resp.Body)
-	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-	assert.Equal(t, before, after)
-}
-
-func TestAddRegistrationInvalidIso3(t *testing.T) {
-	h := &Handler{}
 	// Too many letters ISO-code
 	body := `{
    		"country": "Norway",
@@ -2458,7 +3104,7 @@ func TestAddRegistrationInvalidIso3(t *testing.T) {
 	assert.Equal(t, before, after)
 }
 
-func TestAddRegistrationInvalidIso4(t *testing.T) {
+func TestAddRegistrationInvalidIso3(t *testing.T) {
 	h := &Handler{}
 	// Numbers instead of letters ISO-code
 	body := `{
@@ -2496,7 +3142,7 @@ func TestAddRegistrationInvalidIso4(t *testing.T) {
 	assert.Equal(t, before, after)
 }
 
-func TestAddRegistrationInvalidIso5(t *testing.T) {
+func TestAddRegistrationInvalidIso4(t *testing.T) {
 	h := &Handler{}
 	// Symbols instead of letters
 	body := `{
@@ -2536,44 +3182,6 @@ func TestAddRegistrationInvalidIso5(t *testing.T) {
 
 func TestAddRegistrationInvalidCountry1(t *testing.T) {
 	h := &Handler{}
-	// Blank country
-	body := `{
-   		"country": "",
-   		"isoCode": "No",
-   		"features": {
-      		"temperature": true,
-      		"precipitation": true,
-      		"airQuality": true,
-      		"capital": true,
-      		"coordinates": true,
-      		"population": true,
-      		"area": true,
-      		"targetCurrencies": ["EUR", "USD", "SEK"]
-		}
-	}`
-
-	var req = httptest.NewRequest(http.MethodPost, "/envdash/v1/registrations", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	before := h.RegistrationCount.Load()
-
-	h.addRegistration(w, req)
-
-	after := h.RegistrationCount.Load()
-	resp := w.Result()
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			t.Fatal(err)
-		}
-	}(resp.Body)
-	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-	assert.Equal(t, before, after)
-}
-
-func TestAddRegistrationInvalidCountry2(t *testing.T) {
-	h := &Handler{}
 	// Country containing numbers
 	body := `{
    		"country": "123456",
@@ -2610,7 +3218,7 @@ func TestAddRegistrationInvalidCountry2(t *testing.T) {
 	assert.Equal(t, before, after)
 }
 
-func TestAddRegistrationInvalidCountry3(t *testing.T) {
+func TestAddRegistrationInvalidCountry2(t *testing.T) {
 	h := &Handler{}
 	// Country containing symbols
 	body := `{
@@ -2663,6 +3271,44 @@ func TestAddRegistrationInvalidCurrency1(t *testing.T) {
       		"population": true,
       		"area": true,
       		"targetCurrencies": ["EU", "USD", "SEK"]
+		}
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, "/envdash/v1/registrations", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	before := h.RegistrationCount.Load()
+
+	h.addRegistration(w, req)
+
+	after := h.RegistrationCount.Load()
+	resp := w.Result()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}(resp.Body)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Equal(t, before, after)
+}
+
+func TestAddRegistrationInvalidIsoAndCountry(t *testing.T) {
+	h := &Handler{}
+	// ISO-code and country blank
+	body := `{
+   		"country": "",
+   		"isoCode": "",
+   		"features": {
+      		"temperature": true,
+      		"precipitation": true,
+      		"airQuality": true,
+      		"capital": true,
+      		"coordinates": true,
+      		"population": true,
+      		"area": true,
+      		"targetCurrencies": ["EUR", "USD", "SEK"]
 		}
 	}`
 
@@ -2963,14 +3609,18 @@ func TestAddRegistrationServerError(t *testing.T) {
 }
 
 func TestReplaceRegistrationSuccess(t *testing.T) {
-	originGet := getRegistrationDoc
+	originGet := getRegistrationByIDFunc
 	originSet := setRegistrationDoc
 
 	var gotID string
 	var gotReg map[string]any
 
-	getRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
-		return nil
+	getRegistrationByIDFunc = func(ctx context.Context, client *firestore.Client, id string) (models.StoredRegistration, error) {
+		return models.StoredRegistration{
+			ID:      id,
+			Country: "Norway",
+			IsoCode: "NO",
+		}, nil
 	}
 
 	setRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string, reg map[string]any) error {
@@ -2980,11 +3630,11 @@ func TestReplaceRegistrationSuccess(t *testing.T) {
 	}
 
 	defer func() {
-		getRegistrationDoc = originGet
+		getRegistrationByIDFunc = originGet
 		setRegistrationDoc = originSet
 	}()
 
-	h := &Handler{}
+	h := newTestRegistrationHandler(t)
 
 	body := `{
    		"country": "Norway",
@@ -3037,14 +3687,18 @@ func TestReplaceRegistrationSuccess(t *testing.T) {
 }
 
 func TestReplaceRegistrationNormalizationSuccess(t *testing.T) {
-	originGet := getRegistrationDoc
+	originGet := getRegistrationByIDFunc
 	originSet := setRegistrationDoc
 
 	var gotID string
 	var gotReg map[string]any
 
-	getRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
-		return nil
+	getRegistrationByIDFunc = func(ctx context.Context, client *firestore.Client, id string) (models.StoredRegistration, error) {
+		return models.StoredRegistration{
+			ID:      id,
+			Country: "Norway",
+			IsoCode: "NO",
+		}, nil
 	}
 
 	setRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string, reg map[string]any) error {
@@ -3054,11 +3708,11 @@ func TestReplaceRegistrationNormalizationSuccess(t *testing.T) {
 	}
 
 	defer func() {
-		getRegistrationDoc = originGet
+		getRegistrationByIDFunc = originGet
 		setRegistrationDoc = originSet
 	}()
 
-	h := &Handler{}
+	h := newTestRegistrationHandler(t)
 
 	body := `{
    		"country": " Norway",
@@ -3103,14 +3757,18 @@ func TestReplaceRegistrationNormalizationSuccess(t *testing.T) {
 }
 
 func TestReplaceRegistrationEmptyFeaturesSuccess(t *testing.T) {
-	originGet := getRegistrationDoc
+	originGet := getRegistrationByIDFunc
 	originSet := setRegistrationDoc
 
 	var gotID string
 	var gotReg map[string]any
 
-	getRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
-		return nil
+	getRegistrationByIDFunc = func(ctx context.Context, client *firestore.Client, id string) (models.StoredRegistration, error) {
+		return models.StoredRegistration{
+			ID:      id,
+			Country: "Norway",
+			IsoCode: "NO",
+		}, nil
 	}
 
 	setRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string, reg map[string]any) error {
@@ -3120,11 +3778,11 @@ func TestReplaceRegistrationEmptyFeaturesSuccess(t *testing.T) {
 	}
 
 	defer func() {
-		getRegistrationDoc = originGet
+		getRegistrationByIDFunc = originGet
 		setRegistrationDoc = originSet
 	}()
 
-	h := &Handler{}
+	h := newTestRegistrationHandler(t)
 
 	body := `{
    		"country": " Norway",
@@ -3164,6 +3822,93 @@ func TestReplaceRegistrationEmptyFeaturesSuccess(t *testing.T) {
 	assert.False(t, features.Population)
 	assert.False(t, features.Area)
 	assert.Empty(t, features.TargetCurrencies)
+}
+
+func TestReplaceRegistrationResolvesMissingIdentitySuccess(t *testing.T) {
+	origByName := clients.FetchCountryByNameFunc
+	defer func() {
+		clients.FetchCountryByNameFunc = origByName
+	}()
+
+	clients.FetchCountryByNameFunc = func(ctx context.Context, country string) (models.RestCountryResponse, error) {
+		return models.RestCountryResponse{
+			ISOCode: "NO",
+			Name: struct {
+				Common string `json:"common"`
+			}{
+				Common: "Norway",
+			},
+		}, nil
+	}
+
+	h := newTestRegistrationHandler(t)
+	ctx := context.Background()
+
+	_, err := h.Client.Collection(utility.RegistrationsCollection).Doc("reg-put-002").Set(ctx, models.StoredRegistration{
+		Country:    "Sweden",
+		IsoCode:    "SE",
+		Features:   models.RegistrationFeatures{},
+		LastChange: "2026-04-16T00:00:00Z",
+	})
+	require.NoError(t, err)
+
+	body := `{
+		"country": "Norway",
+		"features": {}
+	}`
+
+	req := httptest.NewRequest(http.MethodPut, utility.RegistrationPathID+"reg-put-002", bytes.NewBufferString(body))
+	req.SetPathValue("id", "reg-put-002")
+	req.Header.Set(utility.ContentType, utility.ApplicationJSON)
+
+	rr := httptest.NewRecorder()
+	h.replaceRegistration(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	doc, err := h.Client.Collection(utility.RegistrationsCollection).Doc("reg-put-002").Get(ctx)
+	require.NoError(t, err)
+
+	got := doc.Data()
+	assert.Equal(t, "Norway", got["country"])
+	assert.Equal(t, "NO", got["isoCode"])
+}
+
+func TestReplaceRegistrationResolveRegReqIdentityFailure(t *testing.T) {
+	origByName := clients.FetchCountryByNameFunc
+	defer func() {
+		clients.FetchCountryByNameFunc = origByName
+	}()
+
+	clients.FetchCountryByNameFunc = func(ctx context.Context, country string) (models.RestCountryResponse, error) {
+		return models.RestCountryResponse{}, errors.New("lookup failed")
+	}
+
+	h := newTestRegistrationHandler(t)
+	ctx := context.Background()
+
+	_, err := h.Client.Collection(utility.RegistrationsCollection).Doc("reg-put-001").Set(ctx, models.StoredRegistration{
+		Country:    "Sweden",
+		IsoCode:    "SE",
+		Features:   models.RegistrationFeatures{},
+		LastChange: "2026-04-16T00:00:00Z",
+	})
+	require.NoError(t, err)
+
+	body := `{
+		"country": "Norway",
+		"features": {}
+	}`
+
+	req := httptest.NewRequest(http.MethodPut, utility.RegistrationPathID+"reg-put-001", bytes.NewBufferString(body))
+	req.SetPathValue("id", "reg-put-001")
+	req.Header.Set(utility.ContentType, utility.ApplicationJSON)
+
+	rr := httptest.NewRecorder()
+	h.replaceRegistration(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.Contains(t, rr.Body.String(), "failed resolving country or iso-code")
 }
 
 func TestReplaceRegistrationInvalidJson(t *testing.T) {
@@ -3218,13 +3963,13 @@ func TestReplaceRegistrationInvalidJson(t *testing.T) {
 }
 
 func TestReplaceRegistrationNotFound(t *testing.T) {
-	originGet := getRegistrationDoc
+	originGet := getRegistrationByIDFunc
 	originSet := setRegistrationDoc
 
 	var setCalled bool
 
-	getRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
-		return errors.New("not found")
+	getRegistrationByIDFunc = func(ctx context.Context, client *firestore.Client, id string) (models.StoredRegistration, error) {
+		return models.StoredRegistration{}, errors.New("not found")
 	}
 
 	setRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string, reg map[string]any) error {
@@ -3233,11 +3978,11 @@ func TestReplaceRegistrationNotFound(t *testing.T) {
 	}
 
 	defer func() {
-		getRegistrationDoc = originGet
+		getRegistrationByIDFunc = originGet
 		setRegistrationDoc = originSet
 	}()
 
-	h := &Handler{}
+	h := newTestRegistrationHandler(t)
 
 	body := `{
    		"country": " Norway",
@@ -3266,11 +4011,15 @@ func TestReplaceRegistrationNotFound(t *testing.T) {
 }
 
 func TestReplaceRegistrationUpdateFailure(t *testing.T) {
-	originGet := getRegistrationDoc
+	originGet := getRegistrationByIDFunc
 	originSet := setRegistrationDoc
 
-	getRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
-		return nil
+	getRegistrationByIDFunc = func(ctx context.Context, client *firestore.Client, id string) (models.StoredRegistration, error) {
+		return models.StoredRegistration{
+			ID:      id,
+			Country: "Norway",
+			IsoCode: "NO",
+		}, nil
 	}
 
 	setRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string, reg map[string]any) error {
@@ -3278,11 +4027,11 @@ func TestReplaceRegistrationUpdateFailure(t *testing.T) {
 	}
 
 	defer func() {
-		getRegistrationDoc = originGet
+		getRegistrationByIDFunc = originGet
 		setRegistrationDoc = originSet
 	}()
 
-	h := &Handler{}
+	h := newTestRegistrationHandler(t)
 
 	body := `{
    		"country": " Norway",
@@ -3362,18 +4111,19 @@ func TestReplaceRegistrationInvalidId(t *testing.T) {
 }
 
 func TestDeleteRegistrationSuccess(t *testing.T) {
-	originGet := getRegistrationByIDDocImpl
+	originGet := getRegistrationByIDFunc
 	originDelete := deleteRegistrationDoc
 
 	var gotID string
 	var gotDeleteID string
 	var deleteCalled bool
 
-	getRegistrationByIDDocImpl = func(ctx context.Context, client *firestore.Client, id string) (map[string]any, error) {
+	getRegistrationByIDFunc = func(ctx context.Context, client *firestore.Client, id string) (models.StoredRegistration, error) {
 		gotID = id
-		return map[string]any{
-			"isoCode": "NO",
+		return models.StoredRegistration{
+			IsoCode: "NO",
 		}, nil
+
 	}
 
 	deleteRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
@@ -3383,7 +4133,7 @@ func TestDeleteRegistrationSuccess(t *testing.T) {
 	}
 
 	defer func() {
-		getRegistrationByIDDocImpl = originGet
+		getRegistrationByIDFunc = originGet
 		deleteRegistrationDoc = originDelete
 	}()
 
@@ -3410,15 +4160,15 @@ func TestDeleteRegistrationSuccess(t *testing.T) {
 }
 
 func TestDeleteRegistrationGetFailure(t *testing.T) {
-	originGet := getRegistrationByIDDocImpl
+	originGet := getRegistrationByIDFunc
 	originDelete := deleteRegistrationDoc
 
 	var gotID string
 	var deleteCalled bool
 
-	getRegistrationByIDDocImpl = func(ctx context.Context, client *firestore.Client, id string) (map[string]any, error) {
+	getRegistrationByIDFunc = func(ctx context.Context, client *firestore.Client, id string) (models.StoredRegistration, error) {
 		gotID = id
-		return nil, errors.New("could not find registration")
+		return models.StoredRegistration{}, errors.New("could not find registration")
 	}
 
 	deleteRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
@@ -3427,7 +4177,7 @@ func TestDeleteRegistrationGetFailure(t *testing.T) {
 	}
 
 	defer func() {
-		getRegistrationByIDDocImpl = originGet
+		getRegistrationByIDFunc = originGet
 		deleteRegistrationDoc = originDelete
 	}()
 
@@ -3453,17 +4203,17 @@ func TestDeleteRegistrationGetFailure(t *testing.T) {
 }
 
 func TestDeleteRegistrationInvalidId(t *testing.T) {
-	originGet := getRegistrationByIDDocImpl
+	originGet := getRegistrationByIDFunc
 	originDelete := deleteRegistrationDoc
 
 	var gotID string
 	var gotDeleteID string
 	var deleteCalled bool
 
-	getRegistrationByIDDocImpl = func(ctx context.Context, client *firestore.Client, id string) (map[string]any, error) {
+	getRegistrationByIDFunc = func(ctx context.Context, client *firestore.Client, id string) (models.StoredRegistration, error) {
 		gotID = id
-		return map[string]any{
-			"isoCode": "NO",
+		return models.StoredRegistration{
+			IsoCode: "NO",
 		}, nil
 	}
 
@@ -3474,7 +4224,7 @@ func TestDeleteRegistrationInvalidId(t *testing.T) {
 	}
 
 	defer func() {
-		getRegistrationByIDDocImpl = originGet
+		getRegistrationByIDFunc = originGet
 		deleteRegistrationDoc = originDelete
 	}()
 
@@ -3501,17 +4251,17 @@ func TestDeleteRegistrationInvalidId(t *testing.T) {
 }
 
 func TestDeleteRegistrationDeleteFailure(t *testing.T) {
-	originGet := getRegistrationByIDDocImpl
+	originGet := getRegistrationByIDFunc
 	originDelete := deleteRegistrationDoc
 
 	var gotID string
 	var gotDeleteID string
 	var deleteCalled bool
 
-	getRegistrationByIDDocImpl = func(ctx context.Context, client *firestore.Client, id string) (map[string]any, error) {
+	getRegistrationByIDFunc = func(ctx context.Context, client *firestore.Client, id string) (models.StoredRegistration, error) {
 		gotID = id
-		return map[string]any{
-			"isoCode": "NO",
+		return models.StoredRegistration{
+			IsoCode: "NO",
 		}, nil
 	}
 
@@ -3522,7 +4272,7 @@ func TestDeleteRegistrationDeleteFailure(t *testing.T) {
 	}
 
 	defer func() {
-		getRegistrationByIDDocImpl = originGet
+		getRegistrationByIDFunc = originGet
 		deleteRegistrationDoc = originDelete
 	}()
 
@@ -3549,14 +4299,14 @@ func TestDeleteRegistrationDeleteFailure(t *testing.T) {
 }
 
 func TestDeleteRegistrationInvalidIsoCodeType(t *testing.T) {
-	originGet := getRegistrationByIDDocImpl
+	originGet := getRegistrationByIDFunc
 	originDelete := deleteRegistrationDoc
 
 	var deleteCalled bool
 
-	getRegistrationByIDDocImpl = func(ctx context.Context, client *firestore.Client, id string) (map[string]any, error) {
-		return map[string]any{
-			"isoCode": 123,
+	getRegistrationByIDFunc = func(ctx context.Context, client *firestore.Client, id string) (models.StoredRegistration, error) {
+		return models.StoredRegistration{
+			IsoCode: "",
 		}, nil
 	}
 
@@ -3566,7 +4316,7 @@ func TestDeleteRegistrationInvalidIsoCodeType(t *testing.T) {
 	}
 
 	defer func() {
-		getRegistrationByIDDocImpl = originGet
+		getRegistrationByIDFunc = originGet
 		deleteRegistrationDoc = originDelete
 	}()
 
