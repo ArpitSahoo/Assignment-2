@@ -24,7 +24,7 @@ FROM alpine:latest
 WORKDIR /app
 
 # Install CA certificates so HTTPS request work for external APIs
-RUN apk add --no-cache ca-cerfificates
+RUN apk add --no-cache ca-certificates
 
 # Copy compiled binary from builder stage into runtime image
 COPY --from=builder /app/server ./server
