@@ -2,9 +2,11 @@ package main
 
 import (
 	"assignment-2/internal"
+	"assignment-2/internal/clients"
 	"assignment-2/internal/handlers"
 	"assignment-2/internal/utility"
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -30,8 +32,12 @@ func main() {
 		}
 	}(client)
 
+	raw := &clients.RawClient{}
+	cached := clients.NewCachedClient(raw, client)
+
 	handler := &handlers.Handler{
 		Client: client,
+		API:    cached,
 	}
 
 	docs, err := client.Collection(utility.WebhooksCollection).Documents(context.Background()).GetAll()
@@ -60,7 +66,7 @@ func main() {
 		Handler: router,
 	}
 
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("server failed: %v", err)
 	}
 }
