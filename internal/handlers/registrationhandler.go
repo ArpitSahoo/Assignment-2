@@ -145,6 +145,7 @@ func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Registration created with ID: %s", id)
 	// Increase the local registration count by one
 	h.RegistrationCount.Add(1)
+	h.triggerLifecycleWebhooks(ctx, "REGISTER", regReq.IsoCode)
 
 	w.Header().Set(utility.ContentType, utility.ApplicationJSON)
 	w.WriteHeader(http.StatusCreated)
@@ -291,6 +292,7 @@ func (h *Handler) replaceRegistration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.triggerLifecycleWebhooks(ctx, "CHANGE", regReq.IsoCode)
 	log.Printf("Replaced registration with ID: %s", id)
 	w.WriteHeader(http.StatusOK)
 }
@@ -376,6 +378,7 @@ func (h *Handler) deleteRegistration(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed deleting registration", http.StatusInternalServerError)
 		return
 	}
+	h.triggerLifecycleWebhooks(ctx, "REGISTER", isoCode)
 	log.Printf("Deleted registration with ID: %s and isoCode: %s", id, isoCode)
 	w.WriteHeader(http.StatusNoContent)
 }
