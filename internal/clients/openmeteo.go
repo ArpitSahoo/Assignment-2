@@ -18,8 +18,8 @@ var FetchWeatherInfoFunc = fetchWeatherInfo
 // for the given latitude and longitude coordinates.
 func fetchWeatherInfo(lat, lng float64) (models.OpenMeteoResponse, error) {
 	meteoURL := strings.NewReplacer(
-		utility.LatPlaceholder, strconv.FormatFloat(lat, 'f', 6, 64),
-		utility.LngPlaceholder, strconv.FormatFloat(lng, 'f', 6, 64),
+		utility.LatPlaceholder, strconv.FormatFloat(lat, 'f', utility.FloatPrecision, utility.FloatBitSize),
+		utility.LngPlaceholder, strconv.FormatFloat(lng, 'f', utility.FloatPrecision, utility.FloatBitSize),
 	).Replace(utility.OpenMeteoAPIURL)
 
 	resp, err := http.Get(meteoURL)
