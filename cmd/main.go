@@ -2,6 +2,7 @@ package main
 
 import (
 	"assignment-2/internal"
+	"assignment-2/internal/clients"
 	"assignment-2/internal/handlers"
 	"assignment-2/internal/middleware"
 	"assignment-2/internal/utility"
@@ -39,9 +40,12 @@ func main() {
 		}
 	}(client)
 
-	// Handler instance to inject the Firestore client into.
+	raw := &clients.RawClient{}
+	cached := clients.NewCachedClient(raw, client)
+
 	handler := &handlers.Handler{
 		Client: client,
+		API:    cached,
 	}
 
 	router.HandleFunc(utility.AuthPath, handler.HandleAuthenticationReq)
@@ -49,6 +53,7 @@ func main() {
 	router.HandleFunc(utility.RegistrationPath, handler.HandleRegReq)
 	router.HandleFunc(utility.RegistrationPathID, handler.HandleRegReq)
 	router.HandleFunc(utility.StatusPath, handler.HandleStatus)
+	router.HandleFunc(utility.DashboardPath, handler.DashboardHandler)
 
 	mw := middleware.APIKeyMiddleware(handler) // use handler as validator
 	protected := mw(router)
