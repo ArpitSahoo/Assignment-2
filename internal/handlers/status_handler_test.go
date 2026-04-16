@@ -15,7 +15,7 @@ func TestHandleStatus_MethodNotAllowed(t *testing.T) {
 	h := &Handler{}
 
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodPost, "/status", nil)
+	r := httptest.NewRequest(http.MethodPost, "/envdash/v1/status", nil)
 
 	h.HandleStatus(w, r)
 
@@ -58,7 +58,7 @@ func TestHandleStatus_FirestoreReachable(t *testing.T) {
 	h := &Handler{Client: client}
 
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/status/", nil)
+	r := httptest.NewRequest(http.MethodGet, "/envdash/v1/status/", nil)
 
 	h.HandleStatus(w, r)
 
@@ -76,7 +76,7 @@ func TestHandleStatus_WebhookCount(t *testing.T) {
 	h := &Handler{Client: client}
 
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/status/", nil)
+	r := httptest.NewRequest(http.MethodGet, "/envdash/v1/status/", nil)
 
 	h.HandleStatus(w, r)
 

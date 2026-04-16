@@ -7,7 +7,7 @@ const (
 	NotificationPath     = "/envdash/v1/notifications/{id}"
 	NotificationPathBase = "/envdash/v1/notifications/"
 	DashboardPath        = "/envdash/v1/dashboard/{id}"
-	StatusPath           = "/status/"
+	StatusPath           = "/envdash/v1/status/"
 	AuthPath             = "/envdash/v1/auth/"
 	AuthPathKey          = "/envdash/v1/auth/{key}"
 )
