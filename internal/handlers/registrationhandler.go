@@ -138,10 +138,11 @@ func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 
 // handleAllGetRegistration handles GET and HEAD requests to the /registrations
 // and /registrations/{id} endpoints.
-// For HEAD requests, returns headers and status only with no response body.
-// If no ID is provided, GET retrieves all registrations while HEAD returns 200 OK.
-// If ID is provided, validates the document ID length before either checking that it
-// exists (HEAD) or fetching the corresponding registration document (GET).
+// IF no ID is provided, GET returns all registrations while HEAD returns 200 OK
+// with no response body.
+// If an ID is provided, validates the document ID length. For a valid ID, HEAD
+// checks whether the registration exists and returns only the appropriate status code,
+// while GET returns the corresponding registration document as JSON.
 func (h *Handler) handleAllGetRegistration(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received %s request", r.Method)
 
@@ -219,21 +220,11 @@ func (h *Handler) GetAllRegistrations(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(results)
 }
 
-// handleHead writes only HTTP headers for a HEAD request without returning a body.
-// It performs the same validation and lookup logic as the GET handler to determine
-// the appropriate status code, but intentionally omits writing any response body,
-// as required by the HTTP HEAD method.
-// This method mirrors the validation and lookup logic of the GET handler,
-// but intentionally omits writing any response body, as required by the HTTP HEAD method.
+// handleHead handles HEAD requests for /registrations/{id} endpoint.
+// It checks whether the requested registration exists, writes only the
+// appropriate HTTP status code, without returning a response body.
+// Returns 200 OK if the registration exists, or 404 Not Found otherwise.
 func (h *Handler) handleHead(w http.ResponseWriter, r *http.Request, docID string) {
-	docID = strings.TrimSpace(docID)
-
-	// Checks if the docID is empty, if empty it will return a status code of 200.
-	if strings.TrimSpace(docID) == "" {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
 	ctx := firestoreContext(r)
 
 	// Checks if the document with the provided docID exists in Firestore.
