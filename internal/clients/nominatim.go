@@ -15,9 +15,9 @@ import (
 // using the OpenStreetMap Nominatim API, filtered by ISO country code.
 func fetchCapitalCoordinates(isoCode, city string) (lat, lng float64, err error) {
 	osmURL := strings.NewReplacer(
-		"{cap}", city,
-		"{isoCode}", strings.ToLower(isoCode),
-	).Replace(utility.OSMURLBase)
+		utility.CapitalPlaceholder, city,
+		utility.ISOCodePlaceholder, strings.ToLower(isoCode),
+	).Replace(utility.OSMURL)
 
 	req, err := http.NewRequest(http.MethodGet, osmURL, nil)
 	if err != nil {

@@ -50,10 +50,10 @@ func fetchAirQualityInfo(isoCode, cap string) (pm10, pm25 float64, err error) {
 // near the given coordinates within the specified country.
 func fetchOpenAQLocations(isoCode string, lat, lng float64) (models.OpenAQResponse, error) {
 	openAQURL := strings.NewReplacer(
-		"{lat}", strconv.FormatFloat(lat, 'f', 6, 64),
-		"{lng}", strconv.FormatFloat(lng, 'f', 6, 64),
-		"{isoCode}", strings.ToUpper(isoCode),
-	).Replace(utility.OpenAQURLBase)
+		utility.LatPlaceholder, strconv.FormatFloat(lat, 'f', 6, 64),
+		utility.LngPlaceholder, strconv.FormatFloat(lng, 'f', 6, 64),
+		utility.ISOCodePlaceholder, strings.ToLower(isoCode),
+	).Replace(utility.OpenAQURL)
 
 	req, err := http.NewRequest(http.MethodGet, openAQURL, nil)
 	if err != nil {
