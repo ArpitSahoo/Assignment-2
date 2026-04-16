@@ -367,9 +367,58 @@ If `FIRESTORE_EMULATOR_HOST` is unset or the emulator is unreachable, integratio
 
 ## Caching Strategy
 
-DETTE MÅ VI SE OVER
+We use a Firestore-backed decorator pattern: `CachedClient` wraps a `RawClient` and implements the flow:
+check cache -> return cached if valid -> otherwise fetch live -> store result with TTL.
+### Goals achieved
+- Reduce repeated calls to external APIs, by reusing latest response.
+- Keep cached data fresh using per-endpoint TTLs.
+- Fail-safe: if Firestore is unavailable or cache is malformed, the system falls back to live fetches.
 
-ARPIT HER, trenger vi dette?
+### How it works (high-level)
+- The `APIClient` interface defines methods used by handlers:
+   - `GetCountry(ctx, iso)`, `GetWeather(ctx, lat,lng)`, `GetExchangeRates(ctx, base, targets)`, `GetAirQuality(ctx, iso, capital)`.
+- `RawClient` performs actual HTTP requests (via package fetch functions).
+- `CachedClient` wraps any `APIClient` and:
+   1. Builds a (deterministic) cache key from endpoint + params.
+   2. Calls `cache.GetCached(ctx, fsClient, key)` to attempt a read from Firestore.
+   3. If a valid (not expired) payload exists and unmarshal correctly -> return it (cache hit).
+   4. Otherwise, call underlying `Underlying.Get*` (live fetch).
+   5. On success marshal result -> `cache.SetCached(ctx, fsClient, key, payload, ttl)` (best-effort write).
+- If the Firestore client is `nil`, cache reads return a miss and writes are skipped (cache disabled mode).
+
+Files:
+- Cache helpers: `internal/cache/storeCache.go` (`MakeCacheKey`, `GetCached`, `SetCached`)
+- Cache model: `internal/models/cachestruct.go` (`CacheEntry` with Payload/CreatedAt/ExpiresAt)
+- Decorator client: `internal/clients/cachedClient.go`
+- API interface: `internal/clients/APIClientInterface.go`
+- Raw implementation: `internal/clients/rawClient.go`
+
+### Cache key generation
+Keys are produced by `MakeCacheKey(endpoint, params)`:
+
+1. JSON‑marshal `params`
+2. Concatenate the result with the `endpoint` label
+3. Hash the concatenated bytes with SHA‑256
+4. Hex‑encode the hash
+
+Final format:
+```
+cacheKey = hex(sha256(endpoint + json(params)))
+```
+Benefits
+- Produces safe Firestore document IDs (fixed-length, alphanumeric)
+- Namespacing by `endpoint` prevents collisions between different endpoints
+
+Note
+- If `params` is a map, keys should be sorted before marshaling to avoid different JSON orders producing different keys.
+
+### Firestore schema
+Each cache document stored in collection `utility.ApiCacheCollection` contains a `CacheEntry`:
+- `payload` ([]byte) — JSON-marshaled bytes of the response (shown as base64 in the Firestore console)
+- `createdAt` (timestamp)
+- `expiresAt` (timestamp) — used for TTL checks at read time (application-level expiry).
+
+
 
 ---
 
@@ -379,7 +428,7 @@ ARPIT HER, trenger vi dette?
 - `PATCH` for partial registration updates
 - Compound thresholds (high + low bounds in single webhook), and additional threshold operators (`>=`, `<=`, `=`)
 - API key authentication system (`/auth/` endpoint with middleware)
-- HAR MED DETTE ARPIT? - Automatic cache purging with configurable TTL
+- HAR MED DETTE ARPIT? - Automatic cache purging with configurable TTL (NEI VI HAR IKKE CACHE PURGING.....)
 
 ## Known Issues & Limitations
 
@@ -395,11 +444,11 @@ DETTE MÅ VI SE OVER
 
 ### Group members
 
-| Name  | Primary responsibilities                      |
-|-------|-----------------------------------------------|
-| Arpit | Registration endpoints, authentication   |
-| Bjørn | Dashboard handler, Webhooks] |
-| Einar | Registration endpoints                   |
+| Name  | Primary responsibilities                        |
+|-------|-------------------------------------------------|
+| Arpit | Registration endpoints, authentication, caching |
+| Bjørn | Dashboard handler, Webhooks                     |
+| Einar | Registration endpoints                          |
 
 ### How we organised our work
 
