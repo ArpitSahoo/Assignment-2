@@ -51,6 +51,7 @@ func main() {
 
 	router := http.NewServeMux()
 
+	router.HandleFunc("/", handler.HandleLanding)
 	router.HandleFunc(utility.RegistrationPath, handler.HandleRegReq)
 	router.HandleFunc(utility.RegistrationPathID, handler.HandleRegReq)
 	router.HandleFunc(utility.DashboardPath, handler.DashboardHandler)

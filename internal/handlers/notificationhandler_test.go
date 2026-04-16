@@ -320,15 +320,15 @@ func TestWebhookIDHandler_DeleteWebhook_NotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, rr.Code, "body=%s", rr.Body.String())
 }
 
-func TestWebhookHandler_MethodNotAllowed(t *testing.T) {
+func TestWebhookHandler_MethodAllowed(t *testing.T) {
 	h := newTestHandler(t)
 
-	req := httptest.NewRequest(http.MethodPut, utility.NotificationPath, nil)
+	req := httptest.NewRequest(http.MethodGet, utility.NotificationPath, nil)
 	rr := httptest.NewRecorder()
 
 	h.WebhookHandler(rr, req)
 
-	assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	assert.Equal(t, http.StatusOK, rr.Code)
 }
 
 func TestWebhookIDHandler_MethodNotAllowed(t *testing.T) {

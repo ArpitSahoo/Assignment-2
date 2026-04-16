@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -30,7 +31,7 @@ func FetchAirQualityInfo(ctx context.Context, isoCode, cap string) (pm10, pm25 f
 		return utility.UnknownAirQualityValue, utility.UnknownAirQualityValue, fmt.Errorf("missing OPENAQ_API_KEY")
 	}
 
-	city := strings.TrimSpace(cap)
+	city := url.QueryEscape(strings.TrimSpace(cap))
 	if city == "" {
 		return utility.UnknownAirQualityValue, utility.UnknownAirQualityValue, fmt.Errorf("missing capital")
 	}
@@ -132,8 +133,9 @@ func fetchLatestPMValues(ctx context.Context, locationID, pm10SensorID, pm25Sens
 	return pm10, pm25, nil
 }
 
-// calculatePMAverages iterates over up to a small number of OpenAQ locations, fetches their latest
-// PM10 and PM25 sensor readings (using ctx), and returns the mean of each across all locations.
+// calculatePMAverages iterates over OpenAQ locations, fetches their latest
+// PM10 and PM25 sensor readings, and returns the mean of each across all locations.
+// It stops after we have five valid locations.
 // Returns -1 for either value if no valid readings are found.
 func calculatePMAverages(ctx context.Context, aq models.OpenAQResponse) (pm10, pm25 float64, err error) {
 	if len(aq.Results) == 0 {
@@ -144,8 +146,8 @@ func calculatePMAverages(ctx context.Context, aq models.OpenAQResponse) (pm10, p
 	var pm25Values []float64
 
 	maxLocations := utility.MaxOpenAQLocations
-	for i, location := range aq.Results {
-		if i >= maxLocations {
+	for _, location := range aq.Results {
+		if len(pm10Values) >= maxLocations && len(pm25Values) >= maxLocations {
 			break
 		}
 
@@ -175,8 +177,8 @@ func calculatePMAverages(ctx context.Context, aq models.OpenAQResponse) (pm10, p
 		}
 	}
 
-	pm10 = models.MeanValue(pm10Values)
-	pm25 = models.MeanValue(pm25Values)
+	pm10 = utility.MeanValue(pm10Values)
+	pm25 = utility.MeanValue(pm25Values)
 
 	return pm10, pm25, nil
 }

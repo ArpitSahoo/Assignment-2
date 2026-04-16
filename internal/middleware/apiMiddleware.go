@@ -24,6 +24,12 @@ func APIKeyMiddleware(h *handlers.Handler) func(next http.Handler) http.Handler 
 				return
 			}
 
+			// allow landing page
+			if r.URL.Path == "/" && r.Method == http.MethodGet {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			apiKey := strings.TrimSpace(r.Header.Get(utility.APIKeyHeader))
 			if apiKey == "" {
 				http.Error(w, "missing API key, please enter an API key.", http.StatusUnauthorized)
