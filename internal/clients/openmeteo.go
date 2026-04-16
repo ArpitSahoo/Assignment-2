@@ -19,8 +19,8 @@ var FetchWeatherInfoFunc = FetchWeatherInfo
 // latitude and longitude coordinates. Uses ctx on the HTTP request.
 func FetchWeatherInfo(ctx context.Context, lat, lng float64) (models.OpenMeteoResponse, error) {
 	meteoURL := strings.NewReplacer(
-		utility.LatPlaceholder, strconv.FormatFloat(lat, 'f', 6, 64),
-		utility.LngPlaceholder, strconv.FormatFloat(lng, 'f', 6, 64),
+		utility.LatPlaceholder, strconv.FormatFloat(lat, 'f', utility.FloatPrecision, utility.FloatBitSize),
+		utility.LngPlaceholder, strconv.FormatFloat(lng, 'f', utility.FloatPrecision, utility.FloatBitSize),
 	).Replace(utility.OpenMeteoAPIURL)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, meteoURL, nil)

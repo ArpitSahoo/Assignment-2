@@ -201,6 +201,8 @@ func (h *Handler) populateExchangeRateFeature(ctx context.Context, resp *models.
 // Returns "unknown" if pm25 is negative.
 func airQualityLevel(pm25 float64) string {
 	switch {
+	case pm25 <= utility.UnknownAirQualityValue:
+		return utility.AirQualityUnknown
 	case pm25 <= utility.Pm25GoodMax:
 		return utility.AirQualityGood
 	case pm25 <= utility.Pm25ModerateMax:

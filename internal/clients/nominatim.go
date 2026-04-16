@@ -24,7 +24,7 @@ func FetchCapitalCoordinates(ctx context.Context, isoCode, city string) (lat, ln
 	if err != nil {
 		return 0, 0, fmt.Errorf("creating OSM request: %w", err)
 	}
-	req.Header.Set("User-Agent", "assignment-2/1.0")
+	req.Header.Set(utility.HeaderUserAgent, utility.UserAgentValue)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
