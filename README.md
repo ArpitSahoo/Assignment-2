@@ -323,6 +323,12 @@ go test ./...
 go test -cover ./...
 ```
 
+### Note
+
+Enig med forklaring einar?
+
+Coverage for `internal/clients` may appear lower than expected, even though the related behavior is tested through `DashboardHandler`. This is because some client calls are replaced with test stubs, so the handler behavior is verified without always executing the full client implementation.
+
 ### Integration tests with Firestore emulator
 Integration tests run against a real emulator instance.
 
