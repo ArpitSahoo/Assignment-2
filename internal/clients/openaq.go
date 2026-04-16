@@ -14,7 +14,7 @@ import (
 	"strings"
 )
 
-var FetchAirQualityInfoFunc = fetchAirQualityInfo
+var FetchAirQualityInfoFunc = FetchAirQualityInfo
 
 // openAQAPIKey is the API key for the OpenAQ air quality service,
 // loaded from the OPENAQ_API_KEY environment variable.
@@ -23,7 +23,7 @@ var openAQAPIKey = os.Getenv("OPENAQ_API_KEY")
 // FetchAirQualityInfo fetches PM10 and PM25 air quality averages for a country's capital.
 // It first resolves the capital's coordinates via OSM, then queries OpenAQ for nearby sensors.
 // Returns -1 for both values if data is unavailable.
-func fetchAirQualityInfo(isoCode, cap string) (pm10, pm25 float64, err error) {
+func FetchAirQualityInfo(isoCode, cap string) (pm10, pm25 float64, err error) {
 	if openAQAPIKey == "" {
 		return -1, -1, fmt.Errorf("missing OPENAQ_API_KEY")
 	}
@@ -34,7 +34,7 @@ func fetchAirQualityInfo(isoCode, cap string) (pm10, pm25 float64, err error) {
 		return -1, -1, fmt.Errorf("missing capital")
 	}
 
-	lat, lng, err := fetchCapitalCoordinates(isoCode, city)
+	lat, lng, err := FetchCapitalCoordinates(isoCode, city)
 	if err != nil {
 		return -1, -1, err
 	}
