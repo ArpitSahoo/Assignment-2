@@ -46,7 +46,7 @@ func createDashboardThroughHandler(t *testing.T, h *Handler, body string) models
 func TestWriteJSONError(t *testing.T) {
 	w := httptest.NewRecorder()
 
-	writeJSONError(w, http.StatusBadRequest, "missing registration id")
+	utility.WriteJSONError(w, http.StatusBadRequest, "missing registration id")
 
 	assert.Equal(t, http.StatusBadRequest, w.Result().StatusCode)
 	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
