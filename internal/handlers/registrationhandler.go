@@ -22,8 +22,15 @@ import (
 // Handler holds shared dependencies and local registration
 // and webhook counter.
 type Handler struct {
+<<<<<<< internal/handlers/registrationhandler.go
 	Client                          *firestore.Client
 	RegistrationCount, WebhookCount atomic.Int64
+=======
+	Client            *firestore.Client
+	RegistrationCount atomic.Int64
+	WebhookCount      atomic.Int64
+	API               clients.APIClient
+>>>>>>> internal/handlers/registrationhandler.go
 }
 
 // addRegistrationDocImpl stores a registration document, returns a generated ID.
@@ -318,7 +325,7 @@ func (h *Handler) replaceRegistration(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.triggerLifecycleWebhooks(ctx, "CHANGE", isoCode)
-
+    
 	log.Printf("Replaced registration with ID: %s", id)
 	w.WriteHeader(http.StatusOK)
 }
@@ -371,12 +378,25 @@ func (h *Handler) partialUpdateRegistration(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+<<<<<<< internal/handlers/registrationhandler.go
 	isoCode := reg.IsoCode
 	if regReq.IsoCode != nil {
 		isoCode = *regReq.IsoCode
 	}
 
 	h.triggerLifecycleWebhooks(ctx, "CHANGE", isoCode)
+=======
+	isoCode := ""
+	if regReq.IsoCode != nil {
+		isoCode = *regReq.IsoCode
+	} else {
+		data, err := getRegistrationByIDDocImpl(ctxPatch, h.Client, id)
+		if err == nil {
+			isoCode, _ = data["isoCode"].(string)
+		}
+	}
+	h.triggerLifecycleWebhooks(ctxPatch, "CHANGE", isoCode)
+>>>>>>> internal/handlers/registrationhandler.go
 	log.Printf("Updated registration with ID: %s", id)
 	// Respond with status code 200
 	w.WriteHeader(http.StatusOK)
@@ -418,8 +438,13 @@ func (h *Handler) deleteRegistration(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "failed deleting registration")
 		return
 	}
+<<<<<<< internal/handlers/registrationhandler.go
 	h.triggerLifecycleWebhooks(ctx, "DELETE", reg.IsoCode)
 	log.Printf("Deleted registration with ID: %s and isoCode: %s", id, reg.IsoCode)
+=======
+	h.triggerLifecycleWebhooks(ctx, "DELETE", isoCode)
+	log.Printf("Deleted registration with ID: %s and isoCode: %s", id, isoCode)
+>>>>>>> internal/handlers/registrationhandler.go
 	w.WriteHeader(http.StatusNoContent)
 }
 
