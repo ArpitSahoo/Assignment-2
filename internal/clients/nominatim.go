@@ -11,9 +11,9 @@ import (
 	"strings"
 )
 
-// fetchCapitalCoordinates looks up the latitude and longitude of a capital city
+// FetchCapitalCoordinates looks up the latitude and longitude of a capital city
 // using the OpenStreetMap Nominatim API, filtered by ISO country code.
-func fetchCapitalCoordinates(isoCode, city string) (lat, lng float64, err error) {
+func FetchCapitalCoordinates(isoCode, city string) (lat, lng float64, err error) {
 	osmURL := strings.NewReplacer(
 		utility.CapitalPlaceholder, city,
 		utility.ISOCodePlaceholder, strings.ToLower(isoCode),
