@@ -204,7 +204,7 @@ func populateExchangeRateFeature(resp *models.DashboardResponse, reg models.Stor
 // Returns "unknown" if pm25 is negative.
 func airQualityLevel(pm25 float64) string {
 	switch {
-	case pm25 < 0:
+	case pm25 <= utility.UnknownAirQualityValue:
 		return utility.AirQualityUnknown
 	case pm25 <= utility.Pm25GoodMax:
 		return utility.AirQualityGood
