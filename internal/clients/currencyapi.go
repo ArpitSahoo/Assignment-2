@@ -51,7 +51,7 @@ func FetchExchangeRate(ctx context.Context, targetCur []string, curr string) (ma
 	}
 	results := make(map[string]float64, len(targetCur))
 	for _, curr := range targetCur {
-		if v, ok := exchangeRate.Rates[t]; ok {
+		if v, ok := exchangeRate.Rates[curr]; ok {
 			results[curr] = v
 		}
 	}
