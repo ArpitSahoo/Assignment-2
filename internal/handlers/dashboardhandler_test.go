@@ -22,6 +22,7 @@ func newTestDashboardHandler(t *testing.T) *Handler {
 
 	return &Handler{
 		Client: newTestFirestoreClient(t),
+		API:    &clients.RawClient{},
 	}
 }
 
@@ -94,7 +95,7 @@ func TestPopulateCountryFeaturesSuccess(t *testing.T) {
 		Area:       385207,
 	}
 
-	populateCountryFeatures(&resp, reg, country)
+	(&Handler{}).populateCountryFeatures(&resp, reg, country)
 
 	require.NotNil(t, resp.Features.Capital)
 	assert.Equal(t, "Oslo", *resp.Features.Capital)
