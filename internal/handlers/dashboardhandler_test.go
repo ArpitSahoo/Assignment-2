@@ -559,19 +559,23 @@ func TestDashboardSuccess_TableDriven(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			h := newTestDashboardHandler(t)
 
-			clients.FetchCountryInfoFunc = func(isoCode string) (models.RestCountryResponse, error) {
+			clients.FetchCountryInfoFunc = func(ctx context.Context, isoCode string) (models.RestCountryResponse, error) {
+				_ = ctx // test stub ignores ctx; OK because handler provides a context
 				return tt.stubCountry, nil
 			}
 
-			clients.FetchWeatherInfoFunc = func(lat, lng float64) (models.OpenMeteoResponse, error) {
+			clients.FetchWeatherInfoFunc = func(ctx context.Context, lat, lng float64) (models.OpenMeteoResponse, error) {
+				_ = ctx
 				return tt.stubWeather, nil
 			}
 
-			clients.FetchAirQualityInfoFunc = func(isoCode, cap string) (float64, float64, error) {
+			clients.FetchAirQualityInfoFunc = func(ctx context.Context, isoCode, cap string) (float64, float64, error) {
+				_ = ctx
 				return tt.stubPM10, tt.stubPM25, nil
 			}
 
-			clients.FetchExchangeRateFunc = func(targetCur []string, curr string) (map[string]float64, error) {
+			clients.FetchExchangeRateFunc = func(ctx context.Context, targetCur []string, curr string) (map[string]float64, error) {
+				_ = ctx
 				return tt.stubRates, nil
 			}
 
@@ -700,7 +704,8 @@ func TestDashboardHandlerFailure_TableDriven(t *testing.T) {
 
 			h := newTestDashboardHandler(t)
 
-			clients.FetchCountryInfoFunc = func(isoCode string) (models.RestCountryResponse, error) {
+			clients.FetchCountryInfoFunc = func(ctx context.Context, isoCode string) (models.RestCountryResponse, error) {
+				_ = ctx // test stub ignores ctx; OK because handler provides a context
 				return tt.stubCountry, tt.stubCountryErr
 			}
 
@@ -927,20 +932,24 @@ func TestDashboardHandlerPartialFailure_TableDriven(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			h := newTestDashboardHandler(t)
 
-			clients.FetchCountryInfoFunc = func(isoCode string) (models.RestCountryResponse, error) {
+			clients.FetchCountryInfoFunc = func(ctx context.Context, isoCode string) (models.RestCountryResponse, error) {
+				_ = ctx // test stub ignores ctx; OK because handler provides a context
 				return tt.stubCountry, nil
 			}
 
-			clients.FetchWeatherInfoFunc = func(lat, lng float64) (models.OpenMeteoResponse, error) {
+			clients.FetchWeatherInfoFunc = func(ctx context.Context, lat, lng float64) (models.OpenMeteoResponse, error) {
+				_ = ctx
 				return tt.stubWeather, tt.stubWeatherErr
 			}
 
-			clients.FetchAirQualityInfoFunc = func(isoCode, cap string) (float64, float64, error) {
+			clients.FetchAirQualityInfoFunc = func(ctx context.Context, isoCode, cap string) (float64, float64, error) {
+				_ = ctx
 				return tt.stubPM10, tt.stubPM25, tt.stubAQErr
 			}
 
-			clients.FetchExchangeRateFunc = func(targetCur []string, curr string) (map[string]float64, error) {
-				return tt.stubRates, tt.stubRatesErr
+			clients.FetchExchangeRateFunc = func(ctx context.Context, targetCur []string, curr string) (map[string]float64, error) {
+				_ = ctx
+				return tt.stubRates, nil
 			}
 
 			got := createDashboardThroughHandler(t, h, tt.createBody)
