@@ -29,6 +29,7 @@ func fetchAirQualityInfo(isoCode, cap string) (pm10, pm25 float64, err error) {
 	}
 
 	city := url.QueryEscape(strings.TrimSpace(cap))
+	log.Printf(city)
 	if city == "" {
 		return -1, -1, fmt.Errorf("missing capital")
 	}
@@ -52,7 +53,6 @@ func fetchOpenAQLocations(isoCode string, lat, lng float64) (models.OpenAQRespon
 	openAQURL := strings.NewReplacer(
 		utility.LatPlaceholder, strconv.FormatFloat(lat, 'f', 6, 64),
 		utility.LngPlaceholder, strconv.FormatFloat(lng, 'f', 6, 64),
-		utility.ISOCodePlaceholder, strings.ToLower(isoCode),
 	).Replace(utility.OpenAQURL)
 
 	req, err := http.NewRequest(http.MethodGet, openAQURL, nil)

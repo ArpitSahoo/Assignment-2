@@ -292,7 +292,6 @@ func (h *Handler) replaceRegistration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.triggerLifecycleWebhooks(ctx, "CHANGE", regReq.IsoCode)
 	log.Printf("Replaced registration with ID: %s", id)
 	w.WriteHeader(http.StatusOK)
 }
@@ -337,6 +336,17 @@ func (h *Handler) partialUpdateRegistration(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "failed updating registration", http.StatusInternalServerError)
 		return
 	}
+
+	isoCode := ""
+	if regReq.IsoCode != nil {
+		isoCode = *regReq.IsoCode
+	} else {
+		data, err := getRegistrationByIDDocImpl(ctxPatch, h.Client, id)
+		if err == nil {
+			isoCode, _ = data["isoCode"].(string)
+		}
+	}
+	h.triggerLifecycleWebhooks(ctxPatch, "CHANGE", isoCode)
 	log.Printf("Updated registration with ID: %s", id)
 	// Respond with status code 200
 	w.WriteHeader(http.StatusOK)
@@ -378,7 +388,7 @@ func (h *Handler) deleteRegistration(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed deleting registration", http.StatusInternalServerError)
 		return
 	}
-	h.triggerLifecycleWebhooks(ctx, "REGISTER", isoCode)
+	h.triggerLifecycleWebhooks(ctx, "DELETE", isoCode)
 	log.Printf("Deleted registration with ID: %s and isoCode: %s", id, isoCode)
 	w.WriteHeader(http.StatusNoContent)
 }
