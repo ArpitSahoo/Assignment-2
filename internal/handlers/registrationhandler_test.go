@@ -162,15 +162,17 @@ func TestResolveRegistrationIdentity_TableDriven(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			clients.FetchCountryInfoFunc = func(isoCode string) (models.RestCountryResponse, error) {
+			ctx := context.Background()
+
+			clients.FetchCountryInfoFunc = func(ctx context.Context, isoCode string) (models.RestCountryResponse, error) {
 				return tt.stubByCode, tt.stubCodeErr
 			}
 
-			clients.FetchCountryByNameFunc = func(country string) (models.RestCountryResponse, error) {
+			clients.FetchCountryByNameFunc = func(ctx context.Context, country string) (models.RestCountryResponse, error) {
 				return tt.stubByName, tt.stubNameErr
 			}
 
-			gotCountry, gotISOCode, gotErr := resolveRegistrationIdentity(tt.req)
+			gotCountry, gotISOCode, gotErr := resolveRegistrationIdentity(ctx, tt.req)
 
 			if tt.wantErr {
 				require.Error(t, gotErr)
@@ -193,7 +195,9 @@ func TestResolveRegReqIdentity(t *testing.T) {
 	}()
 
 	t.Run("success", func(t *testing.T) {
-		clients.FetchCountryInfoFunc = func(isoCode string) (models.RestCountryResponse, error) {
+		ctx := context.Background()
+
+		clients.FetchCountryInfoFunc = func(ctx context.Context, isoCode string) (models.RestCountryResponse, error) {
 			return models.RestCountryResponse{
 				ISOCode: "NO",
 				Name: struct {
@@ -209,7 +213,7 @@ func TestResolveRegReqIdentity(t *testing.T) {
 		}
 		w := httptest.NewRecorder()
 
-		gotCountry, gotISOCode, failed := resolveRegReqIdentity(w, req)
+		gotCountry, gotISOCode, failed := resolveRegReqIdentity(w, ctx, req)
 
 		assert.False(t, failed)
 		assert.Equal(t, "Norway", gotCountry)
@@ -217,13 +221,15 @@ func TestResolveRegReqIdentity(t *testing.T) {
 	})
 
 	t.Run("failure writes json error", func(t *testing.T) {
+		ctx := context.Background()
+
 		req := models.RegistrationRequest{
 			Country: "",
 			IsoCode: "",
 		}
 
 		w := httptest.NewRecorder()
-		gotCountry, gotISOCode, failed := resolveRegReqIdentity(w, req)
+		gotCountry, gotISOCode, failed := resolveRegReqIdentity(w, ctx, req)
 
 		assert.True(t, failed)
 		assert.Equal(t, "", gotCountry)
@@ -237,7 +243,9 @@ func TestResolveRegReqIdentity(t *testing.T) {
 	})
 
 	t.Run("failure when iso lookup fails", func(t *testing.T) {
-		clients.FetchCountryInfoFunc = func(isoCode string) (models.RestCountryResponse, error) {
+		ctx := context.Background()
+
+		clients.FetchCountryInfoFunc = func(ctx context.Context, isoCode string) (models.RestCountryResponse, error) {
 			return models.RestCountryResponse{}, errors.New("lookup failed")
 		}
 
@@ -247,7 +255,7 @@ func TestResolveRegReqIdentity(t *testing.T) {
 		}
 
 		w := httptest.NewRecorder()
-		gotCountry, gotISOCode, failed := resolveRegReqIdentity(w, req)
+		gotCountry, gotISOCode, failed := resolveRegReqIdentity(w, ctx, req)
 
 		assert.True(t, failed)
 		assert.Equal(t, "", gotCountry)
@@ -260,7 +268,9 @@ func TestResolveRegReqIdentity(t *testing.T) {
 		assert.Equal(t, "failed resolving country or iso-code", got["error"])
 	})
 	t.Run("failure when country lookup fails", func(t *testing.T) {
-		clients.FetchCountryByNameFunc = func(country string) (models.RestCountryResponse, error) {
+		ctx := context.Background()
+
+		clients.FetchCountryByNameFunc = func(ctx context.Context, country string) (models.RestCountryResponse, error) {
 			return models.RestCountryResponse{}, errors.New("lookup failed")
 		}
 
@@ -270,7 +280,7 @@ func TestResolveRegReqIdentity(t *testing.T) {
 		}
 
 		w := httptest.NewRecorder()
-		gotCountry, gotISOCode, failed := resolveRegReqIdentity(w, req)
+		gotCountry, gotISOCode, failed := resolveRegReqIdentity(w, ctx, req)
 
 		assert.True(t, failed)
 		assert.Equal(t, "", gotCountry)
@@ -290,7 +300,7 @@ func TestAddRegistrationResolvesMissingIdentitySuccess(t *testing.T) {
 		clients.FetchCountryByNameFunc = origByName
 	}()
 
-	clients.FetchCountryByNameFunc = func(country string) (models.RestCountryResponse, error) {
+	clients.FetchCountryByNameFunc = func(ctx context.Context, country string) (models.RestCountryResponse, error) {
 		return models.RestCountryResponse{
 			ISOCode: "NO",
 			Name: struct {
@@ -1379,7 +1389,7 @@ func TestAddRegistrationResolveRegReqIdentityFailure(t *testing.T) {
 		clients.FetchCountryByNameFunc = origByName
 	}()
 
-	clients.FetchCountryByNameFunc = func(country string) (models.RestCountryResponse, error) {
+	clients.FetchCountryByNameFunc = func(ctx context.Context, country string) (models.RestCountryResponse, error) {
 		return models.RestCountryResponse{}, errors.New("lookup failed")
 	}
 
@@ -1986,7 +1996,7 @@ func TestPartialUpdateRegistrationResolvePatchIdentityFailure(t *testing.T) {
 		clients.FetchCountryByNameFunc = origByName
 	}()
 
-	clients.FetchCountryByNameFunc = func(country string) (models.RestCountryResponse, error) {
+	clients.FetchCountryByNameFunc = func(ctx context.Context, country string) (models.RestCountryResponse, error) {
 		return models.RestCountryResponse{}, errors.New("lookup failed")
 	}
 
@@ -2114,15 +2124,17 @@ func TestResolvePatchIdentity_TableDriven(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			clients.FetchCountryInfoFunc = func(isoCode string) (models.RestCountryResponse, error) {
+			ctx := context.Background()
+
+			clients.FetchCountryInfoFunc = func(ctx context.Context, isoCode string) (models.RestCountryResponse, error) {
 				return tt.stubByCode, tt.stubCodeErr
 			}
-			clients.FetchCountryByNameFunc = func(country string) (models.RestCountryResponse, error) {
+			clients.FetchCountryByNameFunc = func(ctx context.Context, country string) (models.RestCountryResponse, error) {
 				return tt.stubByName, tt.stubNameErr
 			}
 
 			patch := tt.patch
-			err := resolvePatchIdentity(&patch)
+			err := resolvePatchIdentity(ctx, &patch)
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -3818,7 +3830,7 @@ func TestReplaceRegistrationResolvesMissingIdentitySuccess(t *testing.T) {
 		clients.FetchCountryByNameFunc = origByName
 	}()
 
-	clients.FetchCountryByNameFunc = func(country string) (models.RestCountryResponse, error) {
+	clients.FetchCountryByNameFunc = func(ctx context.Context, country string) (models.RestCountryResponse, error) {
 		return models.RestCountryResponse{
 			ISOCode: "NO",
 			Name: struct {
@@ -3868,7 +3880,7 @@ func TestReplaceRegistrationResolveRegReqIdentityFailure(t *testing.T) {
 		clients.FetchCountryByNameFunc = origByName
 	}()
 
-	clients.FetchCountryByNameFunc = func(country string) (models.RestCountryResponse, error) {
+	clients.FetchCountryByNameFunc = func(ctx context.Context, country string) (models.RestCountryResponse, error) {
 		return models.RestCountryResponse{}, errors.New("lookup failed")
 	}
 
