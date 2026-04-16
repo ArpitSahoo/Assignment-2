@@ -15,7 +15,7 @@ COPY . .
 
 # Build the app binary from cmd package
 # CGO disabled to get static binary
-RUN CGO_ENABLED=0 G00S=linux go build -o server ./cmd
+RUN CGO_ENABLED=0 GOOS=linux go build -o server ./cmd
 
 # Runtime: contains what is needed to run the server
 FROM alpine:latest
