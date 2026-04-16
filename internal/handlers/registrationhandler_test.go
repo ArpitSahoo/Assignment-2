@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"assignment-2/internal/models"
 	"assignment-2/internal/utility"
 	"bytes"
 	"context"
@@ -27,7 +28,7 @@ func newTestRegistrationHandler(t *testing.T) *Handler {
 	}
 }
 
-func createRegistrationThroughHandler(t *testing.T, h *Handler, body string) utility.RegistrationResponse {
+func createRegistrationThroughHandler(t *testing.T, h *Handler, body string) models.RegistrationResponse {
 	t.Helper()
 
 	req := httptest.NewRequest(http.MethodPost, utility.RegistrationPath, bytes.NewBufferString(body))
@@ -37,7 +38,7 @@ func createRegistrationThroughHandler(t *testing.T, h *Handler, body string) uti
 
 	assert.Equal(t, http.StatusCreated, rr.Code, "body=%s", rr.Body.String())
 
-	var resp utility.RegistrationResponse
+	var resp models.RegistrationResponse
 	require.NoError(t, json.NewDecoder(rr.Body).Decode(&resp), "failed to decode registration response")
 	assert.NotEmpty(t, resp.ID, "expected registration ID in response")
 
@@ -77,7 +78,7 @@ func TestBuildCurrencyPatchUpdateNilFeatures(t *testing.T) {
 }
 
 func TestBuildCurrencyPatchUpdateEmptyFeatures(t *testing.T) {
-	got := buildCurrencyPatchUpdate(&utility.RegistrationPatchFeatures{})
+	got := buildCurrencyPatchUpdate(&models.RegistrationPatchFeatures{})
 	assert.Nil(t, got)
 }
 
@@ -2069,7 +2070,7 @@ func TestAddRegistrationSuccess(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	assert.Equal(t, before+1, after)
 
-	var got utility.RegistrationResponse
+	var got models.RegistrationResponse
 	err := json.NewDecoder(resp.Body).Decode(&got)
 
 	assert.NoError(t, err)
@@ -2125,7 +2126,7 @@ func TestAddRegistrationSpaceSuccess(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	assert.Equal(t, before+1, after)
 
-	var got utility.RegistrationResponse
+	var got models.RegistrationResponse
 	err := json.NewDecoder(resp.Body).Decode(&got)
 
 	assert.NoError(t, err)
@@ -2180,7 +2181,7 @@ func TestAddRegistrationFalseFieldsSuccess(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	assert.Equal(t, before+1, after)
 
-	var got utility.RegistrationResponse
+	var got models.RegistrationResponse
 	err := json.NewDecoder(resp.Body).Decode(&got)
 
 	assert.NoError(t, err)
@@ -2226,7 +2227,7 @@ func TestAddRegistrationEmptyFeaturesSuccess(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	assert.Equal(t, before+1, after)
 
-	var got utility.RegistrationResponse
+	var got models.RegistrationResponse
 	err := json.NewDecoder(resp.Body).Decode(&got)
 
 	assert.NoError(t, err)
@@ -2281,7 +2282,7 @@ func TestAddRegistrationNormalizationSuccess(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	assert.Equal(t, before+1, after)
 
-	var got utility.RegistrationResponse
+	var got models.RegistrationResponse
 	err := json.NewDecoder(resp.Body).Decode(&got)
 
 	assert.NoError(t, err)
@@ -2336,7 +2337,7 @@ func TestAddRegistrationEmptyTargetCurrenciesSuccess(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	assert.Equal(t, before+1, after)
 
-	var got utility.RegistrationResponse
+	var got models.RegistrationResponse
 	err := json.NewDecoder(resp.Body).Decode(&got)
 
 	assert.NoError(t, err)
@@ -3022,7 +3023,7 @@ func TestReplaceRegistrationSuccess(t *testing.T) {
 	assert.Equal(t, "NO", gotReg["isoCode"])
 	assert.NotEmpty(t, gotReg["lastChange"])
 
-	features, ok := gotReg["features"].(utility.RegistrationFeatures)
+	features, ok := gotReg["features"].(models.RegistrationFeatures)
 	assert.True(t, ok)
 
 	assert.True(t, features.Temperature)
@@ -3096,7 +3097,7 @@ func TestReplaceRegistrationNormalizationSuccess(t *testing.T) {
 	assert.Equal(t, "NO", gotReg["isoCode"])
 	assert.NotEmpty(t, gotReg["lastChange"])
 
-	features, ok := gotReg["features"].(utility.RegistrationFeatures)
+	features, ok := gotReg["features"].(models.RegistrationFeatures)
 	assert.True(t, ok)
 	assert.Equal(t, []string{"EUR", "USD", "SEK"}, features.TargetCurrencies)
 }
@@ -3152,7 +3153,7 @@ func TestReplaceRegistrationEmptyFeaturesSuccess(t *testing.T) {
 	assert.Equal(t, "Norway", gotReg["country"])
 	assert.Equal(t, "NO", gotReg["isoCode"])
 	assert.NotEmpty(t, gotReg["lastChange"])
-	features, ok := gotReg["features"].(utility.RegistrationFeatures)
+	features, ok := gotReg["features"].(models.RegistrationFeatures)
 	assert.True(t, ok)
 	// Features should be stored as zero-value struct
 	assert.False(t, features.Temperature)

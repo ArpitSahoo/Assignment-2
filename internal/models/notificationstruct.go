@@ -1,4 +1,4 @@
-package utility
+package models
 
 // RegisterWebhook represents a JSON payload used to create a webhook through the /notifications endpoint.
 type RegisterWebhook struct {

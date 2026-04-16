@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"assignment-2/internal/models"
 	"assignment-2/internal/utility"
 	"bytes"
 	"context"
@@ -16,6 +17,10 @@ import (
 // registrations, filters matching subscriptions by event and country, and
 // sends a JSON POST request to each matching webhook URL.
 func (h *Handler) triggerLifecycleWebhooks(ctx context.Context, event string, country string) {
+	if h.Client == nil {
+		return
+	}
+
 	webhooks, err := h.getAllStoredWebhooks(ctx)
 	if err != nil {
 		log.Printf("Error retrieving webhooks: %v", err)
@@ -31,7 +36,7 @@ func (h *Handler) triggerLifecycleWebhooks(ctx context.Context, event string, co
 			continue
 		}
 
-		payload := utility.WebhookInvocationPayload{
+		payload := models.WebhookInvocationPayload{
 			ID:      webhook.ID,
 			Country: country,
 			Event:   event,
@@ -46,7 +51,7 @@ func (h *Handler) triggerLifecycleWebhooks(ctx context.Context, event string, co
 
 // triggerThresholdWebhooks checks all THRESHOLD webhooks against the populated
 // dashboard and fires a notification for each threshold condition that is met.
-func (h *Handler) triggerThresholdWebhooks(ctx context.Context, country string, dashboard utility.DashboardResponse) {
+func (h *Handler) triggerThresholdWebhooks(ctx context.Context, country string, dashboard models.DashboardResponse) {
 	webhooks, err := h.getAllStoredWebhooks(ctx)
 
 	if err != nil {
@@ -61,7 +66,7 @@ func (h *Handler) triggerThresholdWebhooks(ctx context.Context, country string, 
 
 // evaluateThresholdWebhook checks a single webhook against the dashboard and
 // sends a notification if the threshold condition is met.
-func (h *Handler) evaluateThresholdWebhook(webhook utility.RegisterWebhook, country string, dashboard utility.DashboardResponse) {
+func (h *Handler) evaluateThresholdWebhook(webhook models.RegisterWebhook, country string, dashboard models.DashboardResponse) {
 	if webhook.Event != "THRESHOLD" {
 		return
 	}
@@ -85,12 +90,12 @@ func (h *Handler) evaluateThresholdWebhook(webhook utility.RegisterWebhook, coun
 		}
 	}
 
-	payload := utility.WebhookInvocationPayload{
+	payload := models.WebhookInvocationPayload{
 		ID:      webhook.ID,
 		Country: country,
 		Event:   "THRESHOLD",
 		Time:    time.Now().Format("20060102 15:04"),
-		Details: &utility.ThresholdDetails{
+		Details: &models.ThresholdDetails{
 			Field:         webhook.Threshold.Field,
 			Operator:      webhook.Threshold.Operator,
 			Threshold:     webhook.Threshold.Value,
@@ -107,13 +112,13 @@ func (h *Handler) evaluateThresholdWebhook(webhook utility.RegisterWebhook, coun
 
 // matchesCountry reports whether a webhook should be skipped for the given country.
 // Returns true if the webhook has a country filter that does not match the given country.
-func matchesCountry(webhook utility.RegisterWebhook, country string) bool {
+func matchesCountry(webhook models.RegisterWebhook, country string) bool {
 	return webhook.Country != "" && webhook.Country != country
 }
 
 // getMeasuredValue extracts the numeric value for a given field from the dashboard response.
 // Returns the value and true if the field is enabled, false otherwise.
-func getMeasuredValue(field string, dashboard utility.DashboardResponse) (float64, bool) {
+func getMeasuredValue(field string, dashboard models.DashboardResponse) (float64, bool) {
 	switch field {
 	case "temperature":
 		if dashboard.Features.Temperature != nil {
@@ -156,15 +161,15 @@ func checkThreshold(operator string, measuredValue float64, value float64) bool 
 
 // getAllStoredWebhooks retrieves all registered webhooks from the Firestore collection.
 // It returns a slice of RegisterWebhook structs or an error if the retrieval fails.
-func (h *Handler) getAllStoredWebhooks(ctx context.Context) ([]utility.RegisterWebhook, error) {
+func (h *Handler) getAllStoredWebhooks(ctx context.Context) ([]models.RegisterWebhook, error) {
 	docs, err := h.Client.Collection(utility.WebhooksCollection).Documents(ctx).GetAll()
 	if err != nil {
 		return nil, err
 	}
 
-	var webhooks []utility.RegisterWebhook
+	var webhooks []models.RegisterWebhook
 	for _, doc := range docs {
-		var webhook utility.RegisterWebhook
+		var webhook models.RegisterWebhook
 		if err := doc.DataTo(&webhook); err != nil {
 			log.Printf("Error converting document to webhook: %v", err)
 			continue

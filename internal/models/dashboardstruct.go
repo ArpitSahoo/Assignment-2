@@ -1,4 +1,4 @@
-package utility
+package models
 
 // DashboardResponse is the top-level response returned by the dashboard endpoint,
 // containing the country info, enabled features, and the time of last retrieval.

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"assignment-2/internal/models"
 	"assignment-2/internal/utility"
 	"bytes"
 	"encoding/json"
@@ -22,7 +23,7 @@ func newTestHandler(t *testing.T) *Handler {
 	}
 }
 
-func createWebhookThroughHandler(t *testing.T, h *Handler, body string) utility.WebhookResponse {
+func createWebhookThroughHandler(t *testing.T, h *Handler, body string) models.WebhookResponse {
 	t.Helper()
 
 	req := httptest.NewRequest(http.MethodPost, utility.NotificationPath, bytes.NewBufferString(body))
@@ -32,7 +33,7 @@ func createWebhookThroughHandler(t *testing.T, h *Handler, body string) utility.
 
 	assert.Equal(t, http.StatusCreated, rr.Code, "body=%s", rr.Body.String())
 
-	var resp utility.WebhookResponse
+	var resp models.WebhookResponse
 	require.NoError(t, json.NewDecoder(rr.Body).Decode(&resp), "failed to decode webhook response")
 	assert.NotEmpty(t, resp.ID, "expected webhook ID in response")
 
@@ -53,7 +54,7 @@ func TestWebhookHandler_RegisterWebhook_Integration(t *testing.T) {
 
 	assert.Equal(t, http.StatusCreated, rr.Code, "body=%s", rr.Body.String())
 
-	var resp utility.WebhookResponse
+	var resp models.WebhookResponse
 	require.NoError(t, json.NewDecoder(rr.Body).Decode(&resp), "failed to decode response")
 	assert.NotEmpty(t, resp.ID, "expected webhook ID to be set")
 }
@@ -61,13 +62,13 @@ func TestWebhookHandler_RegisterWebhook_Integration(t *testing.T) {
 func TestValidateWebhook_TableDriven(t *testing.T) {
 	tests := []struct {
 		name       string
-		webhook    utility.RegisterWebhook
+		webhook    models.RegisterWebhook
 		wantFailed bool
 		wantStatus int
 	}{
 		{
 			name: "missing url",
-			webhook: utility.RegisterWebhook{
+			webhook: models.RegisterWebhook{
 				Event: "REGISTER",
 			},
 			wantFailed: true,
@@ -75,7 +76,7 @@ func TestValidateWebhook_TableDriven(t *testing.T) {
 		},
 		{
 			name: "invalid event",
-			webhook: utility.RegisterWebhook{
+			webhook: models.RegisterWebhook{
 				Url:   "https://https://webhook.site/1",
 				Event: "WRONG",
 			},
@@ -84,10 +85,10 @@ func TestValidateWebhook_TableDriven(t *testing.T) {
 		},
 		{
 			name: "threshold provided for non-threshold event",
-			webhook: utility.RegisterWebhook{
+			webhook: models.RegisterWebhook{
 				Url:   "https://https://webhook.site/1",
 				Event: "REGISTER",
-				Threshold: &utility.Threshold{
+				Threshold: &models.Threshold{
 					Field:    "pm25",
 					Operator: ">",
 					Value:    10,
@@ -98,7 +99,7 @@ func TestValidateWebhook_TableDriven(t *testing.T) {
 		},
 		{
 			name: "threshold event missing threshold block",
-			webhook: utility.RegisterWebhook{
+			webhook: models.RegisterWebhook{
 				Url:   "https://https://webhook.site/1",
 				Event: "THRESHOLD",
 			},
@@ -107,10 +108,10 @@ func TestValidateWebhook_TableDriven(t *testing.T) {
 		},
 		{
 			name: "invalid threshold field",
-			webhook: utility.RegisterWebhook{
+			webhook: models.RegisterWebhook{
 				Url:   "https://https://webhook.site/1",
 				Event: "THRESHOLD",
-				Threshold: &utility.Threshold{
+				Threshold: &models.Threshold{
 					Field:    "nok",
 					Operator: ">",
 					Value:    10,
@@ -121,10 +122,10 @@ func TestValidateWebhook_TableDriven(t *testing.T) {
 		},
 		{
 			name: "invalid threshold operator",
-			webhook: utility.RegisterWebhook{
+			webhook: models.RegisterWebhook{
 				Url:   "https://https://webhook.site/1",
 				Event: "THRESHOLD",
-				Threshold: &utility.Threshold{
+				Threshold: &models.Threshold{
 					Field:    "pm25",
 					Operator: "!=",
 					Value:    10,
@@ -135,7 +136,7 @@ func TestValidateWebhook_TableDriven(t *testing.T) {
 		},
 		{
 			name: "valid register webhook",
-			webhook: utility.RegisterWebhook{
+			webhook: models.RegisterWebhook{
 				Url:     "https://https://webhook.site/1",
 				Country: "NO",
 				Event:   "REGISTER",
@@ -145,11 +146,11 @@ func TestValidateWebhook_TableDriven(t *testing.T) {
 		},
 		{
 			name: "valid threshold webhook",
-			webhook: utility.RegisterWebhook{
+			webhook: models.RegisterWebhook{
 				Url:     "https://https://webhook.site/1",
 				Country: "NO",
 				Event:   "THRESHOLD",
-				Threshold: &utility.Threshold{
+				Threshold: &models.Threshold{
 					Field:    "pm25",
 					Operator: ">",
 					Value:    20,
@@ -160,10 +161,10 @@ func TestValidateWebhook_TableDriven(t *testing.T) {
 		},
 		{
 			name: "invalid upper operator",
-			webhook: utility.RegisterWebhook{
+			webhook: models.RegisterWebhook{
 				Url:   "https://webhook.site/1",
 				Event: "THRESHOLD",
-				Threshold: &utility.Threshold{
+				Threshold: &models.Threshold{
 					Field:         "pm25",
 					Operator:      ">",
 					Value:         10,
@@ -176,11 +177,11 @@ func TestValidateWebhook_TableDriven(t *testing.T) {
 		},
 		{
 			name: "valid compound threshold webhook",
-			webhook: utility.RegisterWebhook{
+			webhook: models.RegisterWebhook{
 				Url:     "https://webhook.site/1",
 				Country: "NO",
 				Event:   "THRESHOLD",
-				Threshold: &utility.Threshold{
+				Threshold: &models.Threshold{
 					Field:         "pm25",
 					Operator:      ">",
 					Value:         10,
@@ -240,7 +241,7 @@ func TestWebhookHandler_GetAllWebhooks_Integration(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code, "body=%s", rr.Body.String())
 
-	var got []utility.RegisterWebhook
+	var got []models.RegisterWebhook
 	require.NoError(t, json.NewDecoder(rr.Body).Decode(&got), "failed to decode response")
 	assert.Len(t, got, 2)
 }
@@ -262,7 +263,7 @@ func TestWebhookIDHandler_GetWebhookByID_Integration(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code, "body=%s", rr.Body.String())
 
-	var got utility.RegisterWebhook
+	var got models.RegisterWebhook
 	require.NoError(t, json.NewDecoder(rr.Body).Decode(&got), "failed to decode response")
 
 	assert.Equal(t, created.ID, got.ID)

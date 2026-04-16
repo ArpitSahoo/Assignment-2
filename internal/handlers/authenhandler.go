@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"assignment-2/internal/models"
 	"assignment-2/internal/utility"
 	"crypto/rand"
 	"crypto/sha256"
@@ -50,7 +51,7 @@ func (h *Handler) createAPIKey(w http.ResponseWriter, r *http.Request) {
 		}
 	}(r.Body)
 
-	var req utility.AuthenticationRequest // struct to decode the incoming JSON request
+	var req models.AuthenticationRequest // struct to decode the incoming JSON request
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil { // decode the JSON request body into the struct
 		// if there is an error during decoding (e.g., invalid JSON), return a 400 Bad Request error
@@ -77,8 +78,8 @@ func (h *Handler) createAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	now := time.Now().UTC()   // a timestamp variable for the current time in UTC, used for the CreatedAt field in the APIKeyDoc
-	doc := utility.APIKeyDoc{ // create a new APIKeyDoc struct to represent the API key document to be stored in Firestore
+	now := time.Now().UTC()  // a timestamp variable for the current time in UTC, used for the CreatedAt field in the APIKeyDoc
+	doc := models.APIKeyDoc{ // create a new APIKeyDoc struct to represent the API key document to be stored in Firestore
 		Name:      req.Name,
 		Email:     req.Email,
 		Hash:      hashAPIKey(rawKey), // hash the raw API to store only the hash in Firestore for security reasons
@@ -93,8 +94,8 @@ func (h *Handler) createAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set(utility.ContentType, utility.ApplicationJSON)
-	w.WriteHeader(http.StatusCreated)                             // create header and status code for the response
-	_ = json.NewEncoder(w).Encode(utility.AuthenticationResponse{ // encode the response body as JSON
+	w.WriteHeader(http.StatusCreated)                            // create header and status code for the response
+	_ = json.NewEncoder(w).Encode(models.AuthenticationResponse{ // encode the response body as JSON
 		Key:       rawKey,                       // return the raw API key
 		CreatedAt: now.Format("20060102 15:04"), // return timestamp
 	})
@@ -140,7 +141,7 @@ func (h *Handler) validateAPIKey(r *http.Request, rawKey string) (bool, error) {
 		return false, err // otherwise return the error
 	}
 
-	var data utility.APIKeyDoc                // create a variable to hold the API key document data
+	var data models.APIKeyDoc                 // create a variable to hold the API key document data
 	if err := doc.DataTo(&data); err != nil { // decode the Firestore document data into the variable
 		return false, err // if it fails, return false with the error
 	}
