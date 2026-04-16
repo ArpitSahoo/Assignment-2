@@ -18,11 +18,11 @@ import (
 	"google.golang.org/api/iterator"
 )
 
-// Handler holding shared dependencies and local registration counter.
+// Handler holding shared dependencies and local registration
+// and webhook counter.
 type Handler struct {
-	Client            *firestore.Client
-	RegistrationCount atomic.Int64
-	WebhookCount      atomic.Int64
+	Client                          *firestore.Client
+	RegistrationCount, WebhookCount atomic.Int64
 }
 
 // addRegistrationDocImpl stores a registration document, returns a generated ID.
@@ -56,24 +56,19 @@ var deleteRegistrationDoc = func(ctx context.Context, client *firestore.Client, 
 	return err
 }
 
-// getRegistrationByIDDocImpl retrieves a registration document by its ID, returns the document data as a map.
-// Defined as variable to allow for replacement in tests.
-var getRegistrationByIDDocImpl = func(ctx context.Context, client *firestore.Client, id string) (map[string]any, error) {
-	doc, err := client.Collection(utility.RegistrationsCollection).Doc(id).Get(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return doc.Data(), nil
-}
+// getRegistrationByIDFunc retrieves a registration by document ID.
+// Defined as variable to allow replacement in tests.
+var getRegistrationByIDFunc = getRegistrationByID
 
 // HandleRegReq routes incoming HTTP requests to the appropriate handler method
-// based on the request method. Supports POST for adding registrations and GET
-// for retrieving registrations. Responds with 405 Method Not Allowed for unsupported methods.
+// based on the request method. Supports POST, GET, HEAD, PUT, PATCH and DELETE
+// for registration resources. Responds with 405 Method Not Allowed for unsupported
+// methods.
 func (h *Handler) HandleRegReq(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
 		h.addRegistration(w, r)
-	case http.MethodGet:
+	case http.MethodGet, http.MethodHead:
 		h.handleAllGetRegistration(w, r)
 	case http.MethodPut:
 		h.replaceRegistration(w, r)
@@ -82,14 +77,15 @@ func (h *Handler) HandleRegReq(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		h.deleteRegistration(w, r)
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, http.StatusMethodNotAllowed, "Method not allowed")
 	}
 }
 
 // addRegistration handles POST requests to the /registrations endpoint.
 // It decodes, normalizes and validates the request body, stores a dashboard configuration in
 // Firestore, increments the local registration counter and returns the generated
-// registration ID and last-change timestamp. Returns 201 Created on success.
+// registration ID and last-change timestamp. Triggers a webhook REGISTER lifecycle
+// and returns 201 Created on success.
 func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 	defer func(body io.ReadCloser) {
 		err := body.Close()
@@ -118,7 +114,7 @@ func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log.Printf("Failed to add registration: %v", err)
-		http.Error(w, "failed to add registration", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "failed to add registration")
 		return
 	}
 
@@ -134,31 +130,44 @@ func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 	encodeRegResp(w, id, lastChange)
 }
 
-// handleAllGetRegistration handles GET requests to the /registrations endpoint.
-// If the request method is HEAD, delegates to handleHead to return status/headers only
-// If no ID is provided in the path, it retrieves all registrations.
-// If an ID is provided, it validates the ID length before fetching
-// the corresponding registration document from Firestore.
+// handleAllGetRegistration handles GET and HEAD requests to the /registrations
+// and /registrations/{id} endpoints.
+// For HEAD requests, returns headers and status only with no response body.
+// If no ID is provided, GET retrieves all registrations while HEAD returns 200 OK.
+// If ID is provided, validates the document ID length before either checking that it
+// exists (HEAD) or fetching the corresponding registration document (GET).
 func (h *Handler) handleAllGetRegistration(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received %s request", r.Method)
+
 	docID := strings.TrimSpace(r.PathValue("id"))
 	w.Header().Set(utility.ContentType, utility.ApplicationJSON)
 
-	// HEAD → return headers only
-	if r.Method == http.MethodHead {
-		h.handleHead(w, r, docID)
-		return
-	}
-
 	// GET logic
 	if docID == "" {
+		// HEAD -> return headers only
+		if r.Method == http.MethodHead {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 		h.GetAllRegistrations(w, r)
 		return
 	}
 
-	// If an ISO code is provided, validate it before querying Firestore
-	if len(docID) != 20 {
-		http.Error(w, "Invalid document ID, the document must be 20 characters", http.StatusBadRequest)
+	// If a document ID is provided, validate it before querying Firestore
+	if len(docID) != utility.RegistrationDocIDLength {
+		// HEAD -> return headers only
+		if r.Method == http.MethodHead {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		writeJSONError(w, http.StatusBadRequest, "Invalid document ID, the document must be 20 characters")
+		return
+	}
+
+	// HEAD -> return headers only
+	if r.Method == http.MethodHead {
+		h.handleHead(w, r, docID)
 		return
 	}
 
@@ -175,7 +184,7 @@ func (h *Handler) GetAllRegistrations(w http.ResponseWriter, r *http.Request) {
 	iter := h.Client.Collection(utility.RegistrationsCollection).Documents(ctx)
 	defer iter.Stop()
 
-	var results []utility.StoredRegistration
+	var results []models.StoredRegistration
 
 	for {
 		doc, err := iter.Next()
@@ -183,14 +192,14 @@ func (h *Handler) GetAllRegistrations(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		if err != nil {
-			http.Error(w, "Error retrieving data", http.StatusInternalServerError)
+			writeJSONError(w, http.StatusInternalServerError, "Error retrieving data")
 			log.Printf("Failed to list registration documents: %v", err)
 			return
 		}
 
-		var reg utility.StoredRegistration
+		var reg models.StoredRegistration
 		if err := doc.DataTo(&reg); err != nil {
-			http.Error(w, "Failed to decode the registration document", http.StatusInternalServerError)
+			writeJSONError(w, http.StatusInternalServerError, "Failed to decode the registration document")
 			log.Printf("Failed to decode document: %v", err)
 			return
 		}
@@ -235,21 +244,21 @@ func (h *Handler) handleHead(w http.ResponseWriter, r *http.Request, docID strin
 
 // GetRegistrationByID handles a GET request that retrieves a single registration
 // document by its Firestore document ID. If the document exists, it is returned
-// as JSON. If it does not exist or cannot be retrieved, the handler responds
-// with HTTP 404 Not Found.
+// as JSON. If the document is not found, handler responds with 404 Not Found.
+// If the stored document cannot be decoded, responds with 500 Internal Server Error.
 func (h *Handler) GetRegistrationByID(w http.ResponseWriter, r *http.Request, docID string) {
 	ctx := firestoreContext(r)
 
 	doc, err := h.Client.Collection(utility.RegistrationsCollection).Doc(docID).Get(ctx)
 	if err != nil {
-		http.Error(w, "The document was not found", http.StatusNotFound)
+		writeJSONError(w, http.StatusNotFound, "The document was not found")
 		log.Printf("Registration with ID %s not found: %v", docID, err)
 		return
 	}
 
-	var reg utility.StoredRegistration
+	var reg models.StoredRegistration
 	if err := doc.DataTo(&reg); err != nil {
-		http.Error(w, "Failed to decode the registration document", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "Failed to decode the registration document")
 		log.Printf("Failed to decode document: %v", err)
 		return
 	}
@@ -262,15 +271,15 @@ func (h *Handler) GetRegistrationByID(w http.ResponseWriter, r *http.Request, do
 
 // replaceRegistration handles PUT requests to the /registrations/{id} endpoint.
 // It decodes, normalizes and validates the request body, replaces the stored registration
-// configuration for the given ID, updates the last-change timestamp, and returns
-// 200 OK with an empty body on success.
+// configuration for the given ID, updates the last-change timestamp. Triggers a webhook
+// CHANGE lifecycle and returns 200 OK with an empty body on success.
 func (h *Handler) replaceRegistration(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received %s request", r.Method)
 
 	id := strings.TrimSpace(r.PathValue("id"))
 	if id == "" {
 		log.Printf("invalid registration id: %q", id)
-		http.Error(w, "invalid registration id", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "invalid registration id")
 		return
 	}
 
@@ -287,7 +296,7 @@ func (h *Handler) replaceRegistration(w http.ResponseWriter, r *http.Request) {
 	errGet := getRegistrationDoc(ctx, h.Client, id)
 	if errGet != nil {
 		log.Printf("Failed to get registration: %v", errGet)
-		http.Error(w, "failed getting registration", http.StatusNotFound)
+		writeJSONError(w, http.StatusNotFound, "failed getting registration")
 		return
 	}
 
@@ -300,7 +309,7 @@ func (h *Handler) replaceRegistration(w http.ResponseWriter, r *http.Request) {
 	})
 	if errSet != nil {
 		log.Printf("Failed to update registration: %v", errSet)
-		http.Error(w, "failed updating registration", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "failed updating registration")
 		return
 	}
 
@@ -319,7 +328,7 @@ func (h *Handler) partialUpdateRegistration(w http.ResponseWriter, r *http.Reque
 	id := strings.TrimSpace(r.PathValue("id"))
 	if id == "" {
 		log.Printf("invalid registration id: %q", id)
-		http.Error(w, "invalid registration id", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "invalid registration id")
 		return
 	}
 
@@ -335,7 +344,7 @@ func (h *Handler) partialUpdateRegistration(w http.ResponseWriter, r *http.Reque
 	errGet := getRegistrationDoc(ctxPatch, h.Client, id)
 	if errGet != nil {
 		log.Printf("Failed to get registration: %v", errGet)
-		http.Error(w, "failed getting registration", http.StatusNotFound)
+		writeJSONError(w, http.StatusNotFound, "failed getting registration")
 		return
 	}
 
@@ -346,7 +355,7 @@ func (h *Handler) partialUpdateRegistration(w http.ResponseWriter, r *http.Reque
 	_, errSet := h.Client.Collection(utility.RegistrationsCollection).Doc(id).Update(ctxPatch, update)
 	if errSet != nil {
 		log.Printf("Failed to update registration: %v", errSet)
-		http.Error(w, "failed updating registration", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "failed updating registration")
 		return
 	}
 	log.Printf("Updated registration with ID: %s", id)
@@ -356,42 +365,42 @@ func (h *Handler) partialUpdateRegistration(w http.ResponseWriter, r *http.Reque
 
 // deleteRegistration handles DELETE requests to the /registrations/{id} endpoint.
 // Validates the registration ID, ensures the registration exists, then deletes it
-// from Firestore.
+// from Firestore. Triggers a DELETE lifecycle webhook, and returns 204 No Content
+// on success.
 func (h *Handler) deleteRegistration(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received %s request", r.Method)
 
 	id := strings.TrimSpace(r.PathValue("id"))
 	if id == "" {
 		log.Printf("invalid registration id: %q", id)
-		http.Error(w, "invalid registration id", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "invalid registration id")
 		return
 	}
 
 	ctx := firestoreContext(r)
 
-	// Retrieve registration data to make available for webhook notification
-	data, errGet := getRegistrationByIDDocImpl(ctx, h.Client, id)
+	// Retrieve registration reg to make available for webhook notification
+	reg, errGet := getRegistrationByIDFunc(ctx, h.Client, id)
 	if errGet != nil {
 		log.Printf("Failed to get registration: %v", errGet)
-		http.Error(w, "failed getting registration", http.StatusNotFound)
+		writeJSONError(w, http.StatusNotFound, "failed getting registration")
 		return
 	}
 
-	isoCode, ok := data["isoCode"].(string)
-	if !ok {
-		log.Printf("invalid isoCode for registration %q: %#v", id, data["isoCode"])
-		http.Error(w, "failed reading registration", http.StatusInternalServerError)
+	if reg.IsoCode == "" {
+		log.Printf("missing isoCode for registration %q", id)
+		writeJSONError(w, http.StatusInternalServerError, "failed reading registration")
 		return
 	}
 
 	errDel := deleteRegistrationDoc(ctx, h.Client, id)
 	if errDel != nil {
 		log.Printf("Failed to delete registration: %v", errDel)
-		http.Error(w, "failed deleting registration", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "failed deleting registration")
 		return
 	}
-	h.triggerLifecycleWebhooks(ctx, "REGISTER", isoCode)
-	log.Printf("Deleted registration with ID: %s and isoCode: %s", id, isoCode)
+	h.triggerLifecycleWebhooks(ctx, "DELETE", reg.IsoCode)
+	log.Printf("Deleted registration with ID: %s and isoCode: %s", id, reg.IsoCode)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -400,7 +409,7 @@ func (h *Handler) deleteRegistration(w http.ResponseWriter, r *http.Request) {
 func decodeRegReq(w http.ResponseWriter, r *http.Request, regReq *models.RegistrationRequest) bool {
 	if err := json.NewDecoder(r.Body).Decode(regReq); err != nil {
 		log.Printf("Failed to decode registration request: %v", err)
-		http.Error(w, "invalid json payload", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
 		return true
 	}
 	return false
@@ -432,45 +441,49 @@ func firestoreContext(r *http.Request) context.Context {
 // validateRegReq validates registration fields and writes an HTTP error
 // response if validation fails.
 func validateRegReq(w http.ResponseWriter, regReq models.RegistrationRequest) bool {
-	if len(regReq.IsoCode) != utility.IsoCodeLength {
-		log.Printf("Invalid isoCode: %q", regReq.IsoCode)
-		http.Error(w, "iso-code must be 2-letter country code", http.StatusBadRequest)
+	if regReq.Country == "" && regReq.IsoCode == "" {
+		log.Printf("invalid registration request: both country and isoCode are blank")
+		writeJSONError(w, http.StatusBadRequest, "country or iso-code must be provided")
 		return true
 	}
 
-	for _, l := range regReq.IsoCode {
-		if !unicode.IsLetter(l) {
-			log.Printf("Invalid isoCode: %q", l)
-			http.Error(w, "iso-code must contain only letters", http.StatusBadRequest)
+	if regReq.IsoCode != "" {
+		if len(regReq.IsoCode) != utility.IsoCodeLength {
+			log.Printf("invalid isoCode: %q", regReq.IsoCode)
+			writeJSONError(w, http.StatusBadRequest, "iso-code must be 2-letter country code")
 			return true
+		}
+
+		for _, l := range regReq.IsoCode {
+			if !unicode.IsLetter(l) {
+				log.Printf("Invalid isoCode: %q", l)
+				writeJSONError(w, http.StatusBadRequest, "iso-code must contain only letters")
+				return true
+			}
 		}
 	}
 
-	if regReq.Country == "" {
-		log.Printf("invalid country: %q", regReq.Country)
-		http.Error(w, "country cannot be blank", http.StatusBadRequest)
-		return true
-	}
-
-	for _, c := range regReq.Country {
-		// Unicode.IsSpace takes into account country names with spaces in the name
-		if !unicode.IsLetter(c) && !unicode.IsSpace(c) {
-			log.Printf("Invalid country: %q", c)
-			http.Error(w, "country must contain only letters", http.StatusBadRequest)
-			return true
+	if regReq.Country != "" {
+		for _, c := range regReq.Country {
+			// Unicode.IsSpace takes into account country names with spaces in the name
+			if !unicode.IsLetter(c) && !unicode.IsSpace(c) {
+				log.Printf("Invalid country: %q", c)
+				writeJSONError(w, http.StatusBadRequest, "country must contain only letters")
+				return true
+			}
 		}
 	}
 
 	for _, f := range regReq.Features.TargetCurrencies {
 		if len(f) != utility.CurrencyCodeLength {
 			log.Printf("Invalid currency length: %q", f)
-			http.Error(w, "target currency must be 3-letter ISO-code", http.StatusBadRequest)
+			writeJSONError(w, http.StatusBadRequest, "target currency must be 3-letter ISO-code")
 			return true
 		}
 		for _, l := range f {
 			if !unicode.IsLetter(l) {
 				log.Printf("Invalid currency code: %q contains invalid character %q", f, l)
-				http.Error(w, "target currency must contain only letters", http.StatusBadRequest)
+				writeJSONError(w, http.StatusBadRequest, "target currency must contain only letters")
 				return true
 			}
 		}
@@ -513,7 +526,7 @@ func parseRegReq(w http.ResponseWriter, r *http.Request) (models.RegistrationReq
 func decodePatchRegReq(w http.ResponseWriter, r *http.Request, regReq *models.RegistrationPatchRequest) bool {
 	if err := json.NewDecoder(r.Body).Decode(regReq); err != nil {
 		log.Printf("Failed to decode patch request: %v", err)
-		http.Error(w, "invalid json payload", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "invalid json payload")
 		return true
 	}
 	return false
@@ -546,13 +559,13 @@ func validatePatchRegReq(w http.ResponseWriter, regReq models.RegistrationPatchR
 	if regReq.IsoCode != nil {
 		if len(*regReq.IsoCode) != utility.IsoCodeLength {
 			log.Printf("Invalid isoCode: %q", *regReq.IsoCode)
-			http.Error(w, "iso-code must be 2-letter country code", http.StatusBadRequest)
+			writeJSONError(w, http.StatusBadRequest, "iso-code must be 2-letter country code")
 			return true
 		}
 		for _, l := range *regReq.IsoCode {
 			if !unicode.IsLetter(l) {
 				log.Printf("Invalid isoCode: %q", l)
-				http.Error(w, "iso-code must contain only letters", http.StatusBadRequest)
+				writeJSONError(w, http.StatusBadRequest, "iso-code must contain only letters")
 				return true
 			}
 		}
@@ -561,14 +574,14 @@ func validatePatchRegReq(w http.ResponseWriter, regReq models.RegistrationPatchR
 	if regReq.Country != nil {
 		if *regReq.Country == "" {
 			log.Printf("invalid country: %q", *regReq.Country)
-			http.Error(w, "country cannot be blank", http.StatusBadRequest)
+			writeJSONError(w, http.StatusBadRequest, "country cannot be blank")
 			return true
 		}
 		for _, c := range *regReq.Country {
 			// Unicode.IsSpace takes into account country names with spaces in the name
 			if !unicode.IsLetter(c) && !unicode.IsSpace(c) {
 				log.Printf("Invalid country: %q", c)
-				http.Error(w, "country must contain only letters", http.StatusBadRequest)
+				writeJSONError(w, http.StatusBadRequest, "country must contain only letters")
 				return true
 			}
 		}
@@ -580,13 +593,13 @@ func validatePatchRegReq(w http.ResponseWriter, regReq models.RegistrationPatchR
 
 		if f.TargetCurrencies != nil && (f.AddTargetCurrencies != nil || f.RemoveTargetCurrencies != nil) {
 			log.Printf("Invalid target currencies: %q", f.TargetCurrencies)
-			http.Error(w, "target currencies cannot be replaced and added/removed in the same request", http.StatusBadRequest)
+			writeJSONError(w, http.StatusBadRequest, "target currencies cannot be replaced and added/removed in the same request")
 			return true
 		}
 
 		if f.AddTargetCurrencies != nil && f.RemoveTargetCurrencies != nil {
 			log.Printf("Invalid target currencies: %q", f.RemoveTargetCurrencies)
-			http.Error(w, "target currencies cannot be added and removed in the same request", http.StatusBadRequest)
+			writeJSONError(w, http.StatusBadRequest, "target currencies cannot be added and removed in the same request")
 			return true
 		}
 
@@ -644,13 +657,13 @@ func validateCurrencyList(w http.ResponseWriter, currencies *[]string, fieldName
 	for _, curr := range *currencies {
 		if len(curr) != utility.CurrencyCodeLength {
 			log.Printf("Invalid currency length: %q", curr)
-			http.Error(w, fieldName+" must be 3-letter ISO-code", http.StatusBadRequest)
+			writeJSONError(w, http.StatusBadRequest, fieldName+" must be 3-letter ISO-code")
 			return true
 		}
 		for _, l := range curr {
 			if !unicode.IsLetter(l) {
 				log.Printf("Invalid currency code: %q contains invalid character %q", curr, l)
-				http.Error(w, fieldName+" must contain only letters", http.StatusBadRequest)
+				writeJSONError(w, http.StatusBadRequest, fieldName+" must contain only letters")
 				return true
 			}
 		}
