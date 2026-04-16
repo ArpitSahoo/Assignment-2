@@ -93,6 +93,7 @@ const landingHTML = `<!DOCTYPE html>
   .method.post   { background: #1e3a8a; color: #93c5fd; }
   .method.put    { background: #78350f; color: #fcd34d; }
   .method.delete { background: #7f1d1d; color: #fca5a5; }
+  .method.head   { background: #4c1d95; color: #c4b5fd; }
   .path { color: var(--text); }
   .desc { color: var(--muted); margin-left: auto; font-family: sans-serif; font-size: 0.85rem; }
   code {
@@ -146,6 +147,11 @@ const landingHTML = `<!DOCTYPE html>
         <span class="desc">Get configuration</span>
       </div>
       <div class="endpoint">
+        <span class="method head">HEAD</span>
+        <span class="path">/envdash/v1/registrations/</span>
+        <span class="desc">Headers only</span>
+      </div>
+      <div class="endpoint">
         <span class="method put">PUT</span>
         <span class="path">/envdash/v1/registrations/{id}</span>
         <span class="desc">Update configuration</span>
@@ -169,6 +175,16 @@ const landingHTML = `<!DOCTYPE html>
         <span class="method get">GET</span>
         <span class="path">/status/</span>
         <span class="desc">Health check</span>
+      </div>
+      <div class="endpoint">
+        <span class="method post">POST</span>
+        <span class="path">/envdash/v1/auth/</span>
+        <span class="desc">Register &amp; get API key</span>
+      </div>
+      <div class="endpoint">
+        <span class="method delete">DELETE</span>
+        <span class="path">/envdash/v1/auth/{key}</span>
+        <span class="desc">Revoke API key</span>
       </div>
     </section>
 
