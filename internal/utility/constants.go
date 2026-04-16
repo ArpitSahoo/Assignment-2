@@ -1,12 +1,5 @@
 package utility
 
-// Firestore collections
-const (
-	RegistrationsCollection = "registrations"
-	WebhooksCollection      = "webhooks"
-	APIKeysCollection       = "apiKeys"
-)
-
 // API route paths
 const (
 	RegistrationPath     = "/envdash/v1/registrations/"
@@ -17,6 +10,28 @@ const (
 	StatusPath           = "/status/"
 	AuthPath             = "/envdash/v1/auth/"
 	AuthPathKey          = "/envdash/v1/auth/{key}"
+)
+
+// Firestore collections
+const (
+	RegistrationsCollection = "registrations"
+	WebhooksCollection      = "webhooks"
+	APIKeysCollection       = "apiKeys"
+)
+
+// HTTP constants
+const (
+	ContentType     = "Content-Type"
+	ApplicationJSON = "application/json"
+	HeaderUserAgent = "User-Agent"
+	UserAgentValue  = "assignment-2/1.0"
+)
+
+// Authentication
+const (
+	APIKeyHeader      = "Authorization"
+	BaseAPIKeyStarter = "sk-envdash-"
+	OpenAQAPIKey      = "OPENAQ_API_KEY"
 )
 
 // External API base URLs
@@ -36,6 +51,7 @@ const (
 	ISOCodePlaceholder      = "{isoCode}"
 	LatPlaceholder          = "{lat}"
 	LngPlaceholder          = "{lng}"
+	OpenAQIDPlaceholder     = "{id}"
 )
 
 // Health check probe URLs
@@ -47,23 +63,13 @@ const (
 	NominatimProbe     = "https://nominatim.openstreetmap.org/status.php?format=json"
 )
 
-// HTTP constants
+// Client/formatting constants
 const (
-	ContentType     = "Content-Type"
-	ApplicationJSON = "application/json"
-)
-
-// Authentication
-const (
-	APIKeyHeader      = "Authorization"
-	BaseAPIKeyStarter = "sk-envdash-"
-)
-
-// Currency patch field names used in validation error messages
-const (
-	TargetCurrency       = "target currency"
-	AddTargetCurrency    = "add target currency"
-	RemoveTargetCurrency = "remove target currency"
+	MaxOpenAQLocations = 5
+	Pm10ParameterID    = 1
+	Pm25ParameterID    = 2
+	FloatPrecision     = 6
+	FloatBitSize       = 64
 )
 
 // Validation lengths
@@ -73,10 +79,16 @@ const (
 	MinCountryCoordinates = 2
 )
 
+// Currency patch field names used in validation error messages
+const (
+	TargetCurrency       = "target currency"
+	AddTargetCurrency    = "add target currency"
+	RemoveTargetCurrency = "remove target currency"
+)
+
 // Air quality thresholds (PM25 based on AQI breakpoints)
 const (
 	UnknownAirQualityValue = -1
-
 	Pm25GoodMax            = 12.0
 	Pm25ModerateMax        = 35.4
 	Pm25SensitiveGroupsMax = 55.4

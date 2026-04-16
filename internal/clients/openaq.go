@@ -18,30 +18,29 @@ var FetchAirQualityInfoFunc = fetchAirQualityInfo
 
 // openAQAPIKey is the API key for the OpenAQ air quality service,
 // loaded from the OPENAQ_API_KEY environment variable.
-var openAQAPIKey = os.Getenv("OPENAQ_API_KEY")
+var openAQAPIKey = os.Getenv(utility.OpenAQAPIKey)
 
 // FetchAirQualityInfo fetches PM10 and PM25 air quality averages for a country's capital.
 // It first resolves the capital's coordinates via OSM, then queries OpenAQ for nearby sensors.
 // Returns -1 for both values if data is unavailable.
 func fetchAirQualityInfo(isoCode, cap string) (pm10, pm25 float64, err error) {
 	if openAQAPIKey == "" {
-		return -1, -1, fmt.Errorf("missing OPENAQ_API_KEY")
+		return utility.UnknownAirQualityValue, utility.UnknownAirQualityValue, fmt.Errorf("missing OPENAQ_API_KEY")
 	}
 
 	city := url.QueryEscape(strings.TrimSpace(cap))
-	log.Printf(city)
 	if city == "" {
-		return -1, -1, fmt.Errorf("missing capital")
+		return utility.UnknownAirQualityValue, utility.UnknownAirQualityValue, fmt.Errorf("missing capital")
 	}
 
 	lat, lng, err := fetchCapitalCoordinates(isoCode, city)
 	if err != nil {
-		return -1, -1, err
+		return utility.UnknownAirQualityValue, utility.UnknownAirQualityValue, err
 	}
 
-	aq, err := fetchOpenAQLocations(isoCode, lat, lng)
+	aq, err := fetchOpenAQLocations(lat, lng)
 	if err != nil {
-		return -1, -1, err
+		return utility.UnknownAirQualityValue, utility.UnknownAirQualityValue, err
 	}
 
 	return calculatePMAverages(aq)
@@ -49,7 +48,7 @@ func fetchAirQualityInfo(isoCode, cap string) (pm10, pm25 float64, err error) {
 
 // fetchOpenAQLocations queries the OpenAQ API for air quality monitoring locations
 // near the given coordinates within the specified country.
-func fetchOpenAQLocations(isoCode string, lat, lng float64) (models.OpenAQResponse, error) {
+func fetchOpenAQLocations(lat, lng float64) (models.OpenAQResponse, error) {
 	openAQURL := strings.NewReplacer(
 		utility.LatPlaceholder, strconv.FormatFloat(lat, 'f', 6, 64),
 		utility.LngPlaceholder, strconv.FormatFloat(lng, 'f', 6, 64),
@@ -90,18 +89,18 @@ func fetchOpenAQLocations(isoCode string, lat, lng float64) (models.OpenAQRespon
 // Returns -1 for any value whose sensor ID is not found in the response.
 func fetchLatestPMValues(locationID, pm10SensorID, pm25SensorID int) (pm10, pm25 float64, err error) {
 	latestURL := strings.NewReplacer(
-		"{id}", strconv.Itoa(locationID),
+		utility.OpenAQIDPlaceholder, strconv.Itoa(locationID),
 	).Replace(utility.OpenAQLatestURL)
 
 	req, err := http.NewRequest(http.MethodGet, latestURL, nil)
 	if err != nil {
-		return -1, -1, fmt.Errorf("creating OpenAQ latest request: %w", err)
+		return utility.UnknownAirQualityValue, utility.UnknownAirQualityValue, fmt.Errorf("creating OpenAQ latest request: %w", err)
 	}
 	req.Header.Set("X-API-Key", openAQAPIKey)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return -1, -1, fmt.Errorf("fetching OpenAQ latest: %w", err)
+		return utility.UnknownAirQualityValue, utility.UnknownAirQualityValue, fmt.Errorf("fetching OpenAQ latest: %w", err)
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
@@ -112,12 +111,12 @@ func fetchLatestPMValues(locationID, pm10SensorID, pm25SensorID int) (pm10, pm25
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return -1, -1, fmt.Errorf("OpenAQ latest returned %d: %s", resp.StatusCode, string(body))
+		return utility.UnknownAirQualityValue, utility.UnknownAirQualityValue, fmt.Errorf("OpenAQ latest returned %d: %s", resp.StatusCode, string(body))
 	}
 
 	var latest models.OpenAQLatestResponse
 	if err := json.NewDecoder(resp.Body).Decode(&latest); err != nil {
-		return -1, -1, fmt.Errorf("decoding OpenAQ latest: %w", err)
+		return utility.UnknownAirQualityValue, utility.UnknownAirQualityValue, fmt.Errorf("decoding OpenAQ latest: %w", err)
 	}
 
 	pm10, pm25 = -1, -1
@@ -138,13 +137,13 @@ func fetchLatestPMValues(locationID, pm10SensorID, pm25SensorID int) (pm10, pm25
 // Returns -1 for either value if no valid readings are found.
 func calculatePMAverages(aq models.OpenAQResponse) (pm10, pm25 float64, err error) {
 	if len(aq.Results) == 0 {
-		return -1, -1, nil
+		return utility.UnknownAirQualityValue, utility.UnknownAirQualityValue, nil
 	}
 
 	var pm10Values []float64
 	var pm25Values []float64
 
-	maxLocations := 5
+	maxLocations := utility.MaxOpenAQLocations
 	for i, location := range aq.Results {
 		if i >= maxLocations {
 			break
@@ -154,9 +153,9 @@ func calculatePMAverages(aq models.OpenAQResponse) (pm10, pm25 float64, err erro
 
 		for _, sensor := range location.Sensors {
 			switch sensor.Parameter.ID {
-			case 1:
+			case utility.Pm10ParameterID:
 				locPM10 = sensor.ID
-			case 2:
+			case utility.Pm25ParameterID:
 				locPM25 = sensor.ID
 			}
 		}
