@@ -132,8 +132,9 @@ func fetchLatestPMValues(locationID, pm10SensorID, pm25SensorID int) (pm10, pm25
 	return pm10, pm25, nil
 }
 
-// calculatePMAverages iterates over up to 5 OpenAQ locations, fetches their latest
+// calculatePMAverages iterates over OpenAQ locations, fetches their latest
 // PM10 and PM25 sensor readings, and returns the mean of each across all locations.
+// It stops after we have five valid locations.
 // Returns -1 for either value if no valid readings are found.
 func calculatePMAverages(aq models.OpenAQResponse) (pm10, pm25 float64, err error) {
 	if len(aq.Results) == 0 {
@@ -144,8 +145,8 @@ func calculatePMAverages(aq models.OpenAQResponse) (pm10, pm25 float64, err erro
 	var pm25Values []float64
 
 	maxLocations := utility.MaxOpenAQLocations
-	for i, location := range aq.Results {
-		if i >= maxLocations {
+	for _, location := range aq.Results {
+		if len(pm10Values) >= maxLocations && len(pm25Values) >= maxLocations {
 			break
 		}
 
