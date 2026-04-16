@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"assignment-2/internal/clients"
 	"assignment-2/internal/models"
 	"assignment-2/internal/utility"
 	"context"
@@ -105,10 +106,15 @@ func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 	ctx := firestoreContext(r)
 	lastChange := currentLastChange()
 
+	country, isoCode, done := resolveRegReqIdentity(w, regReq)
+	if done {
+		return
+	}
+
 	// Add a registration and return its generated unique ID
 	id, err := addRegistrationDocImpl(ctx, h.Client, map[string]any{
-		"country":    regReq.Country,
-		"isoCode":    regReq.IsoCode,
+		"country":    country,
+		"isoCode":    isoCode,
 		"features":   regReq.Features,
 		"lastChange": lastChange,
 	})
@@ -121,7 +127,7 @@ func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Registration created with ID: %s", id)
 	// Increase the local registration count by one
 	h.RegistrationCount.Add(1)
-	h.triggerLifecycleWebhooks(ctx, "REGISTER", regReq.IsoCode)
+	h.triggerLifecycleWebhooks(ctx, "REGISTER", isoCode)
 
 	w.Header().Set(utility.ContentType, utility.ApplicationJSON)
 	w.WriteHeader(http.StatusCreated)
@@ -293,17 +299,21 @@ func (h *Handler) replaceRegistration(w http.ResponseWriter, r *http.Request) {
 	lastChange := currentLastChange()
 
 	// Ensure registration exists for the provided ID
-	errGet := getRegistrationDoc(ctx, h.Client, id)
+	_, errGet := getRegistrationByIDFunc(ctx, h.Client, id)
 	if errGet != nil {
 		log.Printf("Failed to get registration: %v", errGet)
 		writeJSONError(w, http.StatusNotFound, "failed getting registration")
 		return
 	}
 
+	country, isoCode, done := resolveRegReqIdentity(w, regReq)
+	if done {
+		return
+	}
 	// Replaces stored registration for the provided ID
 	errSet := setRegistrationDoc(ctx, h.Client, id, map[string]any{
-		"country":    regReq.Country,
-		"isoCode":    regReq.IsoCode,
+		"country":    country,
+		"isoCode":    isoCode,
 		"features":   regReq.Features,
 		"lastChange": lastChange,
 	})
@@ -313,15 +323,16 @@ func (h *Handler) replaceRegistration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.triggerLifecycleWebhooks(ctx, "CHANGE", regReq.IsoCode)
+	h.triggerLifecycleWebhooks(ctx, "CHANGE", isoCode)
+
 	log.Printf("Replaced registration with ID: %s", id)
 	w.WriteHeader(http.StatusOK)
 }
 
 // partialUpdateRegistration handles PATCH requests to the /registrations/{id} endpoint.
 // It decodes, normalizes and validates the request body, applies partial updates
-// of a configuration for the given ID, updates the last-change timestamp and returns
-// 200 OK with an empty body on success.
+// of a configuration for the given ID, updates the last-change timestamp. Triggers webhook
+// CHANGE lifecycle and returns 200 OK with an empty body on success.
 func (h *Handler) partialUpdateRegistration(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received %s request", r.Method)
 
@@ -341,7 +352,7 @@ func (h *Handler) partialUpdateRegistration(w http.ResponseWriter, r *http.Reque
 	ctxPatch := firestoreContext(r)
 	lastChange := currentLastChange()
 
-	errGet := getRegistrationDoc(ctxPatch, h.Client, id)
+	reg, errGet := getRegistrationByIDFunc(ctxPatch, h.Client, id)
 	if errGet != nil {
 		log.Printf("Failed to get registration: %v", errGet)
 		writeJSONError(w, http.StatusNotFound, "failed getting registration")
@@ -358,6 +369,13 @@ func (h *Handler) partialUpdateRegistration(w http.ResponseWriter, r *http.Reque
 		writeJSONError(w, http.StatusInternalServerError, "failed updating registration")
 		return
 	}
+
+	isoCode := reg.IsoCode
+	if regReq.IsoCode != nil {
+		isoCode = *regReq.IsoCode
+	}
+
+	h.triggerLifecycleWebhooks(ctxPatch, "CHANGE", isoCode)
 	log.Printf("Updated registration with ID: %s", id)
 	// Respond with status code 200
 	w.WriteHeader(http.StatusOK)
@@ -436,6 +454,49 @@ func currentLastChange() string {
 // firestoreContext returns the request context used for Firestore operations.
 func firestoreContext(r *http.Request) context.Context {
 	return r.Context()
+}
+
+// resolveRegReqIdentity resolves a registration request into a country name
+// and ISO code pair. If it fails, writes a JSON error response and returns
+// failure flag as true.
+func resolveRegReqIdentity(w http.ResponseWriter, regReq models.RegistrationRequest) (string, string, bool) {
+	country, isoCode, errResolve := resolveRegistrationIdentity(regReq)
+	if errResolve != nil {
+		log.Printf("Failed to resolve registration identity: %v", errResolve)
+		writeJSONError(w, http.StatusBadRequest, "failed resolving country or iso-code")
+		return "", "", true
+	}
+	return country, isoCode, false
+}
+
+// resolveRegistrationIdentity resolves a registration request into a complete
+// country name and ISO code pair. If only ISO Code or country name is provided,
+// looks up the missing field using the REST Countries client.
+func resolveRegistrationIdentity(regReq models.RegistrationRequest) (string, string, error) {
+	country := regReq.Country
+	isoCode := regReq.IsoCode
+
+	switch {
+	case country != "" && isoCode != "":
+		return country, isoCode, nil
+
+	case isoCode != "":
+		info, err := clients.FetchCountryInfoFunc(isoCode)
+		if err != nil {
+			return "", "", err
+		}
+		return info.Name.Common, isoCode, nil
+
+	case country != "":
+		info, err := clients.FetchCountryByNameFunc(country)
+		if err != nil {
+			return "", "", err
+		}
+		return info.Name.Common, info.ISOCode, nil
+
+	default:
+		return "", "", errors.New("country or isoCode must be provided")
+	}
 }
 
 // validateRegReq validates registration fields and writes an HTTP error
