@@ -3,6 +3,7 @@ package clients
 import (
 	"assignment-2/internal/models"
 	"assignment-2/internal/utility"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,22 +14,17 @@ import (
 
 var FetchExchangeRateFunc = FetchExchangeRate
 
-// FetchExchangeRate fetches exchange rates for the given target currencies,
-// relative to the base currency. Returns a map of currency code to rate,
-// or nil if no target currencies are specified.
-func FetchExchangeRate(targetCur []string, cur string) (map[string]float64, error) {
-	if len(targetCur) == 0 {
-		return nil, nil
-	}
-	if cur == "" {
-		return nil, fmt.Errorf("base currency is empty")
+// FetchExchangeRate gets exchange rates for fetches exchange rates for the given target currencies,
+// relative to the base currency. Uses ctx when making the HTTP request. Returns a map of currency code to rate,
+// or nil if no target currencies are specified
+func FetchExchangeRate(ctx context.Context, targetCur []string, curr string) (map[string]float64, error) {
+	url := strings.Replace(utility.CurrencyAPIURL, utility.CurrencyCodePlaceholder, curr, 1)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating exchange request: %w", err)
 	}
 
-	curApiURL := strings.NewReplacer(
-		utility.CurrencyCodePlaceholder, strings.ToUpper(cur),
-	).Replace(utility.CurrencyAPIURL)
-
-	resp, err := http.Get(curApiURL)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetching exchange rates: %w", err)
 	}
@@ -49,12 +45,15 @@ func FetchExchangeRate(targetCur []string, cur string) (map[string]float64, erro
 		return nil, fmt.Errorf("decoding exchange rates: %w", err)
 	}
 
-	result := make(map[string]float64)
-	for _, cur := range targetCur {
-		if rate, ok := exchangeRate.Rates[strings.ToUpper(cur)]; ok {
-			result[strings.ToUpper(cur)] = rate
+	// Filter to requested targets (if targets empty, return all)
+	if len(targetCur) == 0 {
+		return exchangeRate.Rates, nil
+	}
+	results := make(map[string]float64, len(targetCur))
+	for _, curr := range targetCur {
+		if v, ok := exchangeRate.Rates[t]; ok {
+			results[curr] = v
 		}
 	}
-
-	return result, nil
+	return results, nil
 }
