@@ -3,6 +3,7 @@ package clients
 import (
 	"assignment-2/internal/models"
 	"assignment-2/internal/utility"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,15 +12,15 @@ import (
 	"strings"
 )
 
-// fetchCapitalCoordinates looks up the latitude and longitude of a capital city
+// FetchCapitalCoordinates looks up the latitude and longitude of a capital city
 // using the OpenStreetMap Nominatim API, filtered by ISO country code.
-func fetchCapitalCoordinates(isoCode, city string) (lat, lng float64, err error) {
+func FetchCapitalCoordinates(ctx context.Context, isoCode, city string) (lat, lng float64, err error) {
 	osmURL := strings.NewReplacer(
 		utility.CapitalPlaceholder, city,
 		utility.ISOCodePlaceholder, strings.ToLower(isoCode),
 	).Replace(utility.OSMURL)
 
-	req, err := http.NewRequest(http.MethodGet, osmURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, osmURL, nil)
 	if err != nil {
 		return 0, 0, fmt.Errorf("creating OSM request: %w", err)
 	}

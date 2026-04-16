@@ -106,3 +106,5 @@ const (
 	AirQualityVeryUnhealthy   = "Very Unhealthy"
 	AirQualityHazardous       = "Hazardous"
 )
+
+const ApiCacheCollection = "cache"

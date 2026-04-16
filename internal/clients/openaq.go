@@ -3,58 +3,61 @@ package clients
 import (
 	"assignment-2/internal/models"
 	"assignment-2/internal/utility"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
 )
 
-var FetchAirQualityInfoFunc = fetchAirQualityInfo
+var FetchAirQualityInfoFunc = FetchAirQualityInfo
 
 // openAQAPIKey is the API key for the OpenAQ air quality service,
 // loaded from the OPENAQ_API_KEY environment variable.
 var openAQAPIKey = os.Getenv(utility.OpenAQAPIKey)
 
 // FetchAirQualityInfo fetches PM10 and PM25 air quality averages for a country's capital.
-// It first resolves the capital's coordinates via OSM, then queries OpenAQ for nearby sensors.
+// It resolves the capital's coordinates via OSM, queries OpenAQ for nearby sensors,
+// and then computes the mean PM values across up to a small number of locations. uses context
+// so callers can cancel/time out the entire operation.
 // Returns -1 for both values if data is unavailable.
-func fetchAirQualityInfo(isoCode, cap string) (pm10, pm25 float64, err error) {
+func FetchAirQualityInfo(ctx context.Context, isoCode, cap string) (pm10, pm25 float64, err error) {
 	if openAQAPIKey == "" {
 		return utility.UnknownAirQualityValue, utility.UnknownAirQualityValue, fmt.Errorf("missing OPENAQ_API_KEY")
 	}
 
-	city := url.QueryEscape(strings.TrimSpace(cap))
+	city := strings.TrimSpace(cap)
 	if city == "" {
 		return utility.UnknownAirQualityValue, utility.UnknownAirQualityValue, fmt.Errorf("missing capital")
 	}
-
-	lat, lng, err := fetchCapitalCoordinates(isoCode, city)
+	// Ensure city is URL-escaped where needed, FetchCapitalCoordinates expects a raw city string.
+	lat, lng, err := FetchCapitalCoordinates(ctx, isoCode, city)
 	if err != nil {
 		return utility.UnknownAirQualityValue, utility.UnknownAirQualityValue, err
 	}
 
-	aq, err := fetchOpenAQLocations(lat, lng)
+	aq, err := fetchOpenAQLocations(ctx, lat, lng)
 	if err != nil {
 		return utility.UnknownAirQualityValue, utility.UnknownAirQualityValue, err
 	}
 
-	return calculatePMAverages(aq)
+	return calculatePMAverages(ctx, aq)
 }
 
 // fetchOpenAQLocations queries the OpenAQ API for air quality monitoring locations
-// near the given coordinates within the specified country.
-func fetchOpenAQLocations(lat, lng float64) (models.OpenAQResponse, error) {
+// near the given coordinates within the specified country. Uses ctx on the HTTP requests.
+func fetchOpenAQLocations(ctx context.Context, lat, lng float64) (models.OpenAQResponse, error) {
 	openAQURL := strings.NewReplacer(
 		utility.LatPlaceholder, strconv.FormatFloat(lat, 'f', 6, 64),
 		utility.LngPlaceholder, strconv.FormatFloat(lng, 'f', 6, 64),
 	).Replace(utility.OpenAQURL)
 
-	req, err := http.NewRequest(http.MethodGet, openAQURL, nil)
+	// Use the context on the request so cancellations/timeouts are respected.
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, openAQURL, nil)
 	if err != nil {
 		return models.OpenAQResponse{}, fmt.Errorf("creating OpenAQ request: %w", err)
 	}
@@ -85,14 +88,14 @@ func fetchOpenAQLocations(lat, lng float64) (models.OpenAQResponse, error) {
 }
 
 // fetchLatestPMValues fetches the latest sensor readings for a given OpenAQ location
-// and returns the most recent PM10 and PM25 values by matching against the provided sensor IDs.
-// Returns -1 for any value whose sensor ID is not found in the response.
-func fetchLatestPMValues(locationID, pm10SensorID, pm25SensorID int) (pm10, pm25 float64, err error) {
+// and returns the most recent PM10 and PM2.5 values by matching against the provided sensor IDs.
+// Uses ctx on the HTTP request.
+func fetchLatestPMValues(ctx context.Context, locationID, pm10SensorID, pm25SensorID int) (pm10, pm25 float64, err error) {
 	latestURL := strings.NewReplacer(
 		utility.OpenAQIDPlaceholder, strconv.Itoa(locationID),
 	).Replace(utility.OpenAQLatestURL)
 
-	req, err := http.NewRequest(http.MethodGet, latestURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, latestURL, nil)
 	if err != nil {
 		return utility.UnknownAirQualityValue, utility.UnknownAirQualityValue, fmt.Errorf("creating OpenAQ latest request: %w", err)
 	}
@@ -103,10 +106,7 @@ func fetchLatestPMValues(locationID, pm10SensorID, pm25SensorID int) (pm10, pm25
 		return utility.UnknownAirQualityValue, utility.UnknownAirQualityValue, fmt.Errorf("fetching OpenAQ latest: %w", err)
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			log.Printf("Error closing body: %v", err)
-		}
+		_ = Body.Close()
 	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
@@ -132,10 +132,10 @@ func fetchLatestPMValues(locationID, pm10SensorID, pm25SensorID int) (pm10, pm25
 	return pm10, pm25, nil
 }
 
-// calculatePMAverages iterates over up to 5 OpenAQ locations, fetches their latest
-// PM10 and PM25 sensor readings, and returns the mean of each across all locations.
+// calculatePMAverages iterates over up to a small number of OpenAQ locations, fetches their latest
+// PM10 and PM25 sensor readings (using ctx), and returns the mean of each across all locations.
 // Returns -1 for either value if no valid readings are found.
-func calculatePMAverages(aq models.OpenAQResponse) (pm10, pm25 float64, err error) {
+func calculatePMAverages(ctx context.Context, aq models.OpenAQResponse) (pm10, pm25 float64, err error) {
 	if len(aq.Results) == 0 {
 		return utility.UnknownAirQualityValue, utility.UnknownAirQualityValue, nil
 	}
@@ -160,8 +160,9 @@ func calculatePMAverages(aq models.OpenAQResponse) (pm10, pm25 float64, err erro
 			}
 		}
 
-		locValuePM10, locValuePM25, err := fetchLatestPMValues(location.ID, locPM10, locPM25)
+		locValuePM10, locValuePM25, err := fetchLatestPMValues(ctx, location.ID, locPM10, locPM25)
 		if err != nil {
+			// log and continue — don't fail the whole aggregation just because one location failed
 			log.Printf("fetching latest PM values failed for location %d: %v", location.ID, err)
 			continue
 		}

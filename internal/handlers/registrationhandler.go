@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"assignment-2/internal/clients"
 	"assignment-2/internal/models"
 	"assignment-2/internal/utility"
 	"context"
@@ -23,6 +24,7 @@ type Handler struct {
 	Client            *firestore.Client
 	RegistrationCount atomic.Int64
 	WebhookCount      atomic.Int64
+	API               clients.APIClient
 }
 
 // addRegistrationDocImpl stores a registration document, returns a generated ID.
