@@ -19,12 +19,12 @@ import (
 	"google.golang.org/api/iterator"
 )
 
-// Handler holds shared dependencies and local registration
-// and webhook counter.
+// Handler holds shared dependencies, local registration
+// and webhook counter, and API client interface.
 type Handler struct {
 	Client                          *firestore.Client
 	RegistrationCount, WebhookCount atomic.Int64
-	// TODO: re-add API for Caching
+	API                             clients.APIClient
 }
 
 // addRegistrationDocImpl stores a registration document, returns a generated ID.
@@ -109,7 +109,7 @@ func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 	ctx := firestoreContext(r)
 	lastChange := currentLastChange()
 
-	country, isoCode, done := resolveRegReqIdentity(w, regReq)
+	country, isoCode, done := resolveRegReqIdentity(w, ctx, regReq)
 	if done {
 		return
 	}
@@ -301,7 +301,7 @@ func (h *Handler) replaceRegistration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	country, isoCode, done := resolveRegReqIdentity(w, regReq)
+	country, isoCode, done := resolveRegReqIdentity(w, ctx, regReq)
 	if done {
 		return
 	}
@@ -355,7 +355,7 @@ func (h *Handler) partialUpdateRegistration(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := resolvePatchIdentity(&regReq); err != nil {
+	if err := resolvePatchIdentity(ctx, &regReq); err != nil {
 		log.Printf("Failed to resolve patch identity: %v", err)
 		writeJSONError(w, http.StatusBadRequest, "failed resolving country or iso-code")
 		return
@@ -461,8 +461,8 @@ func firestoreContext(r *http.Request) context.Context {
 // resolveRegReqIdentity resolves a registration request into a country name
 // and ISO code pair. If it fails, writes a JSON error response and returns
 // failure flag as true.
-func resolveRegReqIdentity(w http.ResponseWriter, regReq models.RegistrationRequest) (string, string, bool) {
-	country, isoCode, errResolve := resolveRegistrationIdentity(regReq)
+func resolveRegReqIdentity(w http.ResponseWriter, ctx context.Context, regReq models.RegistrationRequest) (string, string, bool) {
+	country, isoCode, errResolve := resolveRegistrationIdentity(ctx, regReq)
 	if errResolve != nil {
 		log.Printf("Failed to resolve registration identity: %v", errResolve)
 		writeJSONError(w, http.StatusBadRequest, "failed resolving country or iso-code")
@@ -474,7 +474,7 @@ func resolveRegReqIdentity(w http.ResponseWriter, regReq models.RegistrationRequ
 // resolveRegistrationIdentity resolves a registration request into a complete
 // country name and ISO code pair. If only ISO Code or country name is provided,
 // looks up the missing field using the REST Countries client.
-func resolveRegistrationIdentity(regReq models.RegistrationRequest) (string, string, error) {
+func resolveRegistrationIdentity(ctx context.Context, regReq models.RegistrationRequest) (string, string, error) {
 	country := regReq.Country
 	isoCode := regReq.IsoCode
 
@@ -483,14 +483,14 @@ func resolveRegistrationIdentity(regReq models.RegistrationRequest) (string, str
 		return country, isoCode, nil
 
 	case isoCode != "":
-		info, err := clients.FetchCountryInfoFunc(isoCode)
+		info, err := clients.FetchCountryInfoFunc(ctx, isoCode)
 		if err != nil {
 			return "", "", err
 		}
 		return info.Name.Common, isoCode, nil
 
 	case country != "":
-		info, err := clients.FetchCountryByNameFunc(country)
+		info, err := clients.FetchCountryByNameFunc(ctx, country)
 		if err != nil {
 			return "", "", err
 		}
@@ -593,7 +593,7 @@ func parseRegReq(w http.ResponseWriter, r *http.Request) (models.RegistrationReq
 // corresponding country. If only country is provided, it resolves and sets both
 // the normalized country name and corresponding isoCode. It returns an error if
 // the lookup fails.
-func resolvePatchIdentity(patch *models.RegistrationPatchRequest) error {
+func resolvePatchIdentity(ctx context.Context, patch *models.RegistrationPatchRequest) error {
 	switch {
 	case patch.Country == nil && patch.IsoCode == nil:
 		return nil
@@ -602,7 +602,7 @@ func resolvePatchIdentity(patch *models.RegistrationPatchRequest) error {
 		return nil
 
 	case patch.IsoCode != nil:
-		info, err := clients.FetchCountryInfoFunc(*patch.IsoCode)
+		info, err := clients.FetchCountryInfoFunc(ctx, *patch.IsoCode)
 		if err != nil {
 			return err
 		}
@@ -612,7 +612,7 @@ func resolvePatchIdentity(patch *models.RegistrationPatchRequest) error {
 		return nil
 
 	default:
-		info, err := clients.FetchCountryByNameFunc(*patch.Country)
+		info, err := clients.FetchCountryByNameFunc(ctx, *patch.Country)
 		if err != nil {
 			return err
 		}
