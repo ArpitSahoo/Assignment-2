@@ -29,7 +29,6 @@ func fetchAirQualityInfo(isoCode, cap string) (pm10, pm25 float64, err error) {
 	}
 
 	city := url.QueryEscape(strings.TrimSpace(cap))
-	log.Printf(city)
 	if city == "" {
 		return -1, -1, fmt.Errorf("missing capital")
 	}
