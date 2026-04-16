@@ -26,6 +26,7 @@ func FetchCountryInfo(ctx context.Context, isoCode string) (models.RestCountryRe
 	if err != nil {
 		return models.RestCountryResponse{}, fmt.Errorf("creating request: %w", err)
 	}
+
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return models.RestCountryResponse{}, fmt.Errorf("fetching country: %w", err)
@@ -54,9 +55,14 @@ func FetchCountryInfo(ctx context.Context, isoCode string) (models.RestCountryRe
 
 // fetchCountryByName fetches country data from REST Countries API using the given country name.
 // Returns the first result, or an error if the request fails or no country is found.
-func fetchCountryByName(country string) (models.RestCountryResponse, error) {
+func fetchCountryByName(ctx context.Context, country string) (models.RestCountryResponse, error) {
 	// QueryEscape makes sure names with space (e.g., New Zealand) work correctly
-	resp, err := http.Get(utility.RestCountriesAPIURLName + url.QueryEscape(country))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, utility.RestCountriesAPIURLName+url.QueryEscape(country), nil)
+	if err != nil {
+		return models.RestCountryResponse{}, fmt.Errorf("fetching country: %w", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return models.RestCountryResponse{}, fmt.Errorf("fetching country: %w", err)
 	}
