@@ -19,7 +19,7 @@ import (
 	"google.golang.org/api/iterator"
 )
 
-// Handler holding shared dependencies and local registration
+// Handler holds shared dependencies and local registration
 // and webhook counter.
 type Handler struct {
 	Client                          *firestore.Client
@@ -36,15 +36,16 @@ var addRegistrationDocImpl = func(ctx context.Context, client *firestore.Client,
 	return ref.ID, nil
 }
 
-// getRegistrationDoc retrieves a registration document registered to a specific
-// registration ID. Defined as variable to allow for replacement in tests.
+// getRegistrationDoc checks whether a registration document exists
+// for the given registration ID. Defined as variable to allow
+// for replacement in tests.
 var getRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string) error {
 	_, err := client.Collection(utility.RegistrationsCollection).Doc(id).Get(ctx)
 	return err
 }
 
-// setRegistrationDoc updates a registration document registered to a specific
-// registration ID. Defined as variable to allow for replacement in tests.
+// setRegistrationDocsets the registration document for the given
+// registration ID. Defined as variable to allow replacement in tests
 var setRegistrationDoc = func(ctx context.Context, client *firestore.Client, id string, reg map[string]any) error {
 	_, err := client.Collection(utility.RegistrationsCollection).Doc(id).Set(ctx, reg)
 	return err
@@ -83,10 +84,11 @@ func (h *Handler) HandleRegReq(w http.ResponseWriter, r *http.Request) {
 }
 
 // addRegistration handles POST requests to the /registrations endpoint.
-// It decodes, normalizes and validates the request body, stores a dashboard configuration in
-// Firestore, increments the local registration counter and returns the generated
-// registration ID and last-change timestamp. Triggers a webhook REGISTER lifecycle
-// and returns 201 Created on success.
+// It decodes, normalizes, and validates the request body, resolves a missing
+// country or isoCode when only one is provided, stores the registration
+// configuration in Firestore, increments the local registration counter.
+// Triggers the REGISTER lifecycle webhook and returns 201 Created with the
+// generated registration ID and last-change timestamp on success.
 func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 	defer func(body io.ReadCloser) {
 		err := body.Close()
@@ -138,7 +140,7 @@ func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 
 // handleAllGetRegistration handles GET and HEAD requests to the /registrations
 // and /registrations/{id} endpoints.
-// IF no ID is provided, GET returns all registrations while HEAD returns 200 OK
+// If no ID is provided, GET returns all registrations while HEAD returns 200 OK
 // with no response body.
 // If an ID is provided, validates the document ID length. For a valid ID, HEAD
 // checks whether the registration exists and returns only the appropriate status code,
@@ -267,9 +269,10 @@ func (h *Handler) GetRegistrationByID(w http.ResponseWriter, r *http.Request, do
 }
 
 // replaceRegistration handles PUT requests to the /registrations/{id} endpoint.
-// It decodes, normalizes and validates the request body, replaces the stored registration
-// configuration for the given ID, updates the last-change timestamp. Triggers a webhook
-// CHANGE lifecycle and returns 200 OK with an empty body on success.
+// It decodes, normalizes, and validates the request body, ensures the registration exists,
+// resolves a missing country or isoCode when only one is provided, replaces the stored
+// registration for the given ID, updates the last-change timestamp. Triggers the CHANGE
+// lifecycle webhook and returns 200 OK with an empty body on success.
 func (h *Handler) replaceRegistration(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received %s request", r.Method)
 
@@ -321,9 +324,10 @@ func (h *Handler) replaceRegistration(w http.ResponseWriter, r *http.Request) {
 }
 
 // partialUpdateRegistration handles PATCH requests to the /registrations/{id} endpoint.
-// It decodes, normalizes and validates the request body, applies partial updates
-// of a configuration for the given ID, updates the last-change timestamp. Triggers webhook
-// CHANGE lifecycle and returns 200 OK with an empty body on success.
+// It decodes, normalizes and validates the request body, ensures registration exists,
+// resolves a missing country or isoCode if only one is provided, applies partial updates
+// to the stored registration, updates the last-change timestamp. Triggers the CHANGE webhook
+// lifecycle and returns 200 OK with an empty body on success.
 func (h *Handler) partialUpdateRegistration(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received %s request", r.Method)
 
@@ -340,13 +344,19 @@ func (h *Handler) partialUpdateRegistration(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	ctxPatch := firestoreContext(r)
+	ctx := firestoreContext(r)
 	lastChange := currentLastChange()
 
-	reg, errGet := getRegistrationByIDFunc(ctxPatch, h.Client, id)
+	reg, errGet := getRegistrationByIDFunc(ctx, h.Client, id)
 	if errGet != nil {
 		log.Printf("Failed to get registration: %v", errGet)
 		writeJSONError(w, http.StatusNotFound, "failed getting registration")
+		return
+	}
+
+	if err := resolvePatchIdentity(&regReq); err != nil {
+		log.Printf("Failed to resolve patch identity: %v", err)
+		writeJSONError(w, http.StatusBadRequest, "failed resolving country or iso-code")
 		return
 	}
 
@@ -354,7 +364,7 @@ func (h *Handler) partialUpdateRegistration(w http.ResponseWriter, r *http.Reque
 	update := buildGeneralPatchUpdate(&regReq, lastChange)
 	update = append(update, buildCurrencyPatchUpdate(regReq.Features)...)
 
-	_, errSet := h.Client.Collection(utility.RegistrationsCollection).Doc(id).Update(ctxPatch, update)
+	_, errSet := h.Client.Collection(utility.RegistrationsCollection).Doc(id).Update(ctx, update)
 	if errSet != nil {
 		log.Printf("Failed to update registration: %v", errSet)
 		writeJSONError(w, http.StatusInternalServerError, "failed updating registration")
@@ -366,7 +376,7 @@ func (h *Handler) partialUpdateRegistration(w http.ResponseWriter, r *http.Reque
 		isoCode = *regReq.IsoCode
 	}
 
-	h.triggerLifecycleWebhooks(ctxPatch, "CHANGE", isoCode)
+	h.triggerLifecycleWebhooks(ctx, "CHANGE", isoCode)
 	log.Printf("Updated registration with ID: %s", id)
 	// Respond with status code 200
 	w.WriteHeader(http.StatusOK)
@@ -435,8 +445,8 @@ func encodeRegResp(w http.ResponseWriter, id, lastChange string) {
 	}
 }
 
-// currentLastChange keeps track of time and date of which a registration
-// has been created or updated.
+// currentLastChange returns the current timestamp in RFC3339 format
+// for a created or updated registration.
 func currentLastChange() string {
 	lastChange := time.Now().Format(time.RFC3339)
 	return lastChange
@@ -518,7 +528,10 @@ func validateRegReq(w http.ResponseWriter, regReq models.RegistrationRequest) bo
 	if regReq.Country != "" {
 		for _, c := range regReq.Country {
 			// Unicode.IsSpace takes into account country names with spaces in the name
-			if !unicode.IsLetter(c) && !unicode.IsSpace(c) {
+			if !unicode.IsLetter(c) && !unicode.IsSpace(c) &&
+				c != '-' && // allow countries which use certain symbols in their name
+				c != '\'' &&
+				c != '’' {
 				log.Printf("Invalid country: %q", c)
 				writeJSONError(w, http.StatusBadRequest, "country must contain only letters")
 				return true
@@ -571,6 +584,45 @@ func parseRegReq(w http.ResponseWriter, r *http.Request) (models.RegistrationReq
 		return models.RegistrationRequest{}, false
 	}
 	return regReq, true
+}
+
+// resolvePatchIdentity resolves a missing country or isoCode in a PATCH request.
+// If neither field is provided, or both are already provided, it leaves the
+// request unchanged. If only isoCode is provided, it resolves and sets the
+// corresponding country. If only country is provided, it resolves and sets both
+// the normalized country name and corresponding isoCode. It returns an error if
+// the lookup fails.
+func resolvePatchIdentity(patch *models.RegistrationPatchRequest) error {
+	switch {
+	case patch.Country == nil && patch.IsoCode == nil:
+		return nil
+
+	case patch.Country != nil && patch.IsoCode != nil:
+		return nil
+
+	case patch.IsoCode != nil:
+		info, err := clients.FetchCountryInfoFunc(*patch.IsoCode)
+		if err != nil {
+			return err
+		}
+
+		country := info.Name.Common
+		patch.Country = &country
+		return nil
+
+	default:
+		info, err := clients.FetchCountryByNameFunc(*patch.Country)
+		if err != nil {
+			return err
+		}
+
+		country := info.Name.Common
+		isoCode := info.ISOCode
+
+		patch.Country = &country
+		patch.IsoCode = &isoCode
+		return nil
+	}
 }
 
 // decodePatchRegReq decodes the JSON request body into PATCH registration request.
@@ -631,7 +683,10 @@ func validatePatchRegReq(w http.ResponseWriter, regReq models.RegistrationPatchR
 		}
 		for _, c := range *regReq.Country {
 			// Unicode.IsSpace takes into account country names with spaces in the name
-			if !unicode.IsLetter(c) && !unicode.IsSpace(c) {
+			if !unicode.IsLetter(c) && !unicode.IsSpace(c) &&
+				c != '-' && // allow countries which use certain symbols in the name
+				c != '\'' &&
+				c != '’' {
 				log.Printf("Invalid country: %q", c)
 				writeJSONError(w, http.StatusBadRequest, "country must contain only letters")
 				return true
@@ -671,8 +726,9 @@ func validatePatchRegReq(w http.ResponseWriter, regReq models.RegistrationPatchR
 	return false
 }
 
-// parsePatchRegReq decodes, normalizes and validates a registration request.
-// Returns the parsed request, false if any step fails.
+// parsePatchRegReq decodes, normalizes, and validates a PATCH
+// registration request. Returns the parsed request and false if
+// any step fails.
 func parsePatchRegReq(w http.ResponseWriter, r *http.Request) (models.RegistrationPatchRequest, bool) {
 	var regReq models.RegistrationPatchRequest
 
