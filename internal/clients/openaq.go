@@ -38,7 +38,7 @@ func fetchAirQualityInfo(isoCode, cap string) (pm10, pm25 float64, err error) {
 		return utility.UnknownAirQualityValue, utility.UnknownAirQualityValue, err
 	}
 
-	aq, err := fetchOpenAQLocations(isoCode, lat, lng)
+	aq, err := fetchOpenAQLocations(lat, lng)
 	if err != nil {
 		return utility.UnknownAirQualityValue, utility.UnknownAirQualityValue, err
 	}
@@ -48,7 +48,7 @@ func fetchAirQualityInfo(isoCode, cap string) (pm10, pm25 float64, err error) {
 
 // fetchOpenAQLocations queries the OpenAQ API for air quality monitoring locations
 // near the given coordinates within the specified country.
-func fetchOpenAQLocations(isoCode string, lat, lng float64) (models.OpenAQResponse, error) {
+func fetchOpenAQLocations(lat, lng float64) (models.OpenAQResponse, error) {
 	openAQURL := strings.NewReplacer(
 		utility.LatPlaceholder, strconv.FormatFloat(lat, 'f', 6, 64),
 		utility.LngPlaceholder, strconv.FormatFloat(lng, 'f', 6, 64),
