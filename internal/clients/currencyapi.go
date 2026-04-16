@@ -11,12 +11,12 @@ import (
 	"strings"
 )
 
-var FetchExchangeRateFunc = fetchExchangeRate
+var FetchExchangeRateFunc = FetchExchangeRate
 
 // FetchExchangeRate fetches exchange rates for the given target currencies,
-// relative to the base currency curr. Returns a map of currency code to rate,
+// relative to the base currency. Returns a map of currency code to rate,
 // or nil if no target currencies are specified.
-func fetchExchangeRate(targetCur []string, cur string) (map[string]float64, error) {
+func FetchExchangeRate(targetCur []string, cur string) (map[string]float64, error) {
 	if len(targetCur) == 0 {
 		return nil, nil
 	}
