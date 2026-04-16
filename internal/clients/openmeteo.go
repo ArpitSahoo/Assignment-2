@@ -12,11 +12,11 @@ import (
 	"strings"
 )
 
-var FetchWeatherInfoFunc = fetchWeatherInfo
+var FetchWeatherInfoFunc = FetchWeatherInfo
 
 // FetchWeatherInfo fetches weather data from the Open-Meteo API
 // for the given latitude and longitude coordinates.
-func fetchWeatherInfo(lat, lng float64) (models.OpenMeteoResponse, error) {
+func FetchWeatherInfo(lat, lng float64) (models.OpenMeteoResponse, error) {
 	meteoURL := strings.NewReplacer(
 		utility.LatPlaceholder, strconv.FormatFloat(lat, 'f', 6, 64),
 		utility.LngPlaceholder, strconv.FormatFloat(lng, 'f', 6, 64),
