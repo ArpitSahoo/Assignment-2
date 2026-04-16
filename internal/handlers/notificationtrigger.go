@@ -17,6 +17,10 @@ import (
 // registrations, filters matching subscriptions by event and country, and
 // sends a JSON POST request to each matching webhook URL.
 func (h *Handler) triggerLifecycleWebhooks(ctx context.Context, event string, country string) {
+	if h.Client == nil {
+		return
+	}
+
 	webhooks, err := h.getAllStoredWebhooks(ctx)
 	if err != nil {
 		log.Printf("Error retrieving webhooks: %v", err)
