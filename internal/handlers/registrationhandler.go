@@ -175,7 +175,7 @@ func (h *Handler) GetAllRegistrations(w http.ResponseWriter, r *http.Request) {
 	iter := h.Client.Collection(utility.RegistrationsCollection).Documents(ctx)
 	defer iter.Stop()
 
-	var results []utility.StoredRegistration
+	var results []models.StoredRegistration
 
 	for {
 		doc, err := iter.Next()
@@ -188,7 +188,7 @@ func (h *Handler) GetAllRegistrations(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		var reg utility.StoredRegistration
+		var reg models.StoredRegistration
 		if err := doc.DataTo(&reg); err != nil {
 			http.Error(w, "Failed to decode the registration document", http.StatusInternalServerError)
 			log.Printf("Failed to decode document: %v", err)
@@ -247,7 +247,7 @@ func (h *Handler) GetRegistrationByID(w http.ResponseWriter, r *http.Request, do
 		return
 	}
 
-	var reg utility.StoredRegistration
+	var reg models.StoredRegistration
 	if err := doc.DataTo(&reg); err != nil {
 		http.Error(w, "Failed to decode the registration document", http.StatusInternalServerError)
 		log.Printf("Failed to decode document: %v", err)
