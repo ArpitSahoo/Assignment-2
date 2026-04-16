@@ -284,6 +284,49 @@ func TestResolveRegReqIdentity(t *testing.T) {
 	})
 }
 
+func TestAddRegistrationResolvesMissingIdentitySuccess(t *testing.T) {
+	origByName := clients.FetchCountryByNameFunc
+	defer func() {
+		clients.FetchCountryByNameFunc = origByName
+	}()
+
+	clients.FetchCountryByNameFunc = func(country string) (models.RestCountryResponse, error) {
+		return models.RestCountryResponse{
+			ISOCode: "NO",
+			Name: struct {
+				Common string `json:"common"`
+			}{
+				Common: "Norway",
+			},
+		}, nil
+	}
+
+	h := newTestRegistrationHandler(t)
+	ctx := context.Background()
+
+	body := `{
+		"country": "Norway",
+		"features": {}
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, utility.RegistrationPath, bytes.NewBufferString(body))
+	req.Header.Set(utility.ContentType, utility.ApplicationJSON)
+
+	rr := httptest.NewRecorder()
+	h.addRegistration(rr, req)
+
+	assert.Equal(t, http.StatusCreated, rr.Code)
+
+	// Read back the created registration.
+	docs, err := h.Client.Collection(utility.RegistrationsCollection).Documents(ctx).GetAll()
+	require.NoError(t, err)
+	require.Len(t, docs, 1)
+
+	got := docs[0].Data()
+	assert.Equal(t, "Norway", got["country"])
+	assert.Equal(t, "NO", got["isoCode"])
+}
+
 func TestAddRegistrationWithPartialUpdateRegistrationSuccess_TableDriven(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -1330,6 +1373,32 @@ func TestPartialUpdateRegistrationInvalidJSON_TableDriven(t *testing.T) {
 		})
 	}
 }
+func TestAddRegistrationResolveRegReqIdentityFailure(t *testing.T) {
+	origByName := clients.FetchCountryByNameFunc
+	defer func() {
+		clients.FetchCountryByNameFunc = origByName
+	}()
+
+	clients.FetchCountryByNameFunc = func(country string) (models.RestCountryResponse, error) {
+		return models.RestCountryResponse{}, errors.New("lookup failed")
+	}
+
+	h := newTestRegistrationHandler(t)
+
+	body := `{
+		"country": "Norway",
+		"features": {}
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, utility.RegistrationPath, bytes.NewBufferString(body))
+	req.Header.Set(utility.ContentType, utility.ApplicationJSON)
+
+	rr := httptest.NewRecorder()
+	h.addRegistration(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.Contains(t, rr.Body.String(), "failed resolving country or iso-code")
+}
 
 func TestPartialUpdateRegistrationValidationFailure_TableDriven(t *testing.T) {
 	tests := []struct {
@@ -1832,7 +1901,6 @@ func TestPartialUpdateRegistrationValidationFailure_TableDriven(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestPartialUpdateRegistrationHandlerFailure_TableDriven(t *testing.T) {
@@ -1908,6 +1976,162 @@ func TestPartialUpdateRegistrationHandlerFailure_TableDriven(t *testing.T) {
 
 			assert.Equal(t, tt.wantStatus, rr.Code)
 			assert.Contains(t, rr.Body.String(), tt.wantBodyContains)
+		})
+	}
+}
+
+func TestPartialUpdateRegistrationResolvePatchIdentityFailure(t *testing.T) {
+	origByName := clients.FetchCountryByNameFunc
+	defer func() {
+		clients.FetchCountryByNameFunc = origByName
+	}()
+
+	clients.FetchCountryByNameFunc = func(country string) (models.RestCountryResponse, error) {
+		return models.RestCountryResponse{}, errors.New("lookup failed")
+	}
+
+	h := newTestRegistrationHandler(t)
+	ctx := context.Background()
+
+	_, err := h.Client.Collection(utility.RegistrationsCollection).Doc("reg-patch-001").Set(ctx, map[string]any{
+		"country": "Sweden",
+		"isoCode": "SE",
+		"features": map[string]any{
+			"temperature":   false,
+			"precipitation": false,
+			"capital":       false,
+		},
+		"lastChange": "2026-04-16T00:00:00Z",
+	})
+	require.NoError(t, err)
+
+	body := `{
+		"country": "Norway"
+	}`
+
+	req := httptest.NewRequest(http.MethodPatch, utility.RegistrationPathID+"reg-patch-001", bytes.NewBufferString(body))
+	req.SetPathValue("id", "reg-patch-001")
+	req.Header.Set(utility.ContentType, utility.ApplicationJSON)
+
+	rr := httptest.NewRecorder()
+	h.partialUpdateRegistration(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.Contains(t, rr.Body.String(), "failed resolving country or iso-code")
+}
+
+func TestResolvePatchIdentity_TableDriven(t *testing.T) {
+	origByCode := clients.FetchCountryInfoFunc
+	origByName := clients.FetchCountryByNameFunc
+	defer func() {
+		clients.FetchCountryInfoFunc = origByCode
+		clients.FetchCountryByNameFunc = origByName
+	}()
+
+	tests := []struct {
+		name        string
+		patch       models.RegistrationPatchRequest
+		stubByCode  models.RestCountryResponse
+		stubByName  models.RestCountryResponse
+		stubCodeErr error
+		stubNameErr error
+		wantCountry *string
+		wantISOCode *string
+		wantErr     bool
+	}{
+		{
+			name:        "both blank",
+			patch:       models.RegistrationPatchRequest{},
+			wantCountry: nil,
+			wantISOCode: nil,
+			wantErr:     false,
+		},
+		{
+			name: "both provided unchanged",
+			patch: models.RegistrationPatchRequest{
+				Country: firestore.Ptr("Norway"),
+				IsoCode: firestore.Ptr("NO"),
+			},
+			wantCountry: firestore.Ptr("Norway"),
+			wantISOCode: firestore.Ptr("NO"),
+			wantErr:     false,
+		},
+		{
+			name: "only isoCode resolves country",
+			patch: models.RegistrationPatchRequest{
+				IsoCode: firestore.Ptr("NO"),
+			},
+			stubByCode: models.RestCountryResponse{
+				ISOCode: "NO",
+				Name: struct {
+					Common string `json:"common"`
+				}{
+					Common: "Norway",
+				},
+			},
+			wantCountry: firestore.Ptr("Norway"),
+			wantISOCode: firestore.Ptr("NO"),
+			wantErr:     false,
+		},
+		{
+			name: "only country resolves isoCode",
+			patch: models.RegistrationPatchRequest{
+				Country: firestore.Ptr("Norway"),
+			},
+			stubByName: models.RestCountryResponse{
+				ISOCode: "NO",
+				Name: struct {
+					Common string `json:"common"`
+				}{
+					Common: "Norway",
+				},
+			},
+			wantCountry: firestore.Ptr("Norway"),
+			wantISOCode: firestore.Ptr("NO"),
+			wantErr:     false,
+		},
+		{
+			name: "isoCode lookup failure",
+			patch: models.RegistrationPatchRequest{
+				IsoCode: firestore.Ptr("NO"),
+			},
+			stubCodeErr: errors.New("lookup failed"),
+			wantCountry: nil,
+			wantISOCode: firestore.Ptr("NO"),
+			wantErr:     true,
+		},
+		{
+			name: "only country provided and lookup by name fails",
+			patch: models.RegistrationPatchRequest{
+				Country: firestore.Ptr("Norway"),
+			},
+			stubNameErr: errors.New("lookup failed"),
+			wantCountry: firestore.Ptr("Norway"),
+			wantISOCode: nil,
+			wantErr:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clients.FetchCountryInfoFunc = func(isoCode string) (models.RestCountryResponse, error) {
+				return tt.stubByCode, tt.stubCodeErr
+			}
+			clients.FetchCountryByNameFunc = func(country string) (models.RestCountryResponse, error) {
+				return tt.stubByName, tt.stubNameErr
+			}
+
+			patch := tt.patch
+			err := resolvePatchIdentity(&patch)
+
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+
+			assert.Equal(t, tt.wantCountry, patch.Country)
+			assert.Equal(t, tt.wantISOCode, patch.IsoCode)
 		})
 	}
 }
@@ -3586,6 +3810,93 @@ func TestReplaceRegistrationEmptyFeaturesSuccess(t *testing.T) {
 	assert.False(t, features.Population)
 	assert.False(t, features.Area)
 	assert.Empty(t, features.TargetCurrencies)
+}
+
+func TestReplaceRegistrationResolvesMissingIdentitySuccess(t *testing.T) {
+	origByName := clients.FetchCountryByNameFunc
+	defer func() {
+		clients.FetchCountryByNameFunc = origByName
+	}()
+
+	clients.FetchCountryByNameFunc = func(country string) (models.RestCountryResponse, error) {
+		return models.RestCountryResponse{
+			ISOCode: "NO",
+			Name: struct {
+				Common string `json:"common"`
+			}{
+				Common: "Norway",
+			},
+		}, nil
+	}
+
+	h := newTestRegistrationHandler(t)
+	ctx := context.Background()
+
+	_, err := h.Client.Collection(utility.RegistrationsCollection).Doc("reg-put-002").Set(ctx, models.StoredRegistration{
+		Country:    "Sweden",
+		IsoCode:    "SE",
+		Features:   models.RegistrationFeatures{},
+		LastChange: "2026-04-16T00:00:00Z",
+	})
+	require.NoError(t, err)
+
+	body := `{
+		"country": "Norway",
+		"features": {}
+	}`
+
+	req := httptest.NewRequest(http.MethodPut, utility.RegistrationPathID+"reg-put-002", bytes.NewBufferString(body))
+	req.SetPathValue("id", "reg-put-002")
+	req.Header.Set(utility.ContentType, utility.ApplicationJSON)
+
+	rr := httptest.NewRecorder()
+	h.replaceRegistration(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	doc, err := h.Client.Collection(utility.RegistrationsCollection).Doc("reg-put-002").Get(ctx)
+	require.NoError(t, err)
+
+	got := doc.Data()
+	assert.Equal(t, "Norway", got["country"])
+	assert.Equal(t, "NO", got["isoCode"])
+}
+
+func TestReplaceRegistrationResolveRegReqIdentityFailure(t *testing.T) {
+	origByName := clients.FetchCountryByNameFunc
+	defer func() {
+		clients.FetchCountryByNameFunc = origByName
+	}()
+
+	clients.FetchCountryByNameFunc = func(country string) (models.RestCountryResponse, error) {
+		return models.RestCountryResponse{}, errors.New("lookup failed")
+	}
+
+	h := newTestRegistrationHandler(t)
+	ctx := context.Background()
+
+	_, err := h.Client.Collection(utility.RegistrationsCollection).Doc("reg-put-001").Set(ctx, models.StoredRegistration{
+		Country:    "Sweden",
+		IsoCode:    "SE",
+		Features:   models.RegistrationFeatures{},
+		LastChange: "2026-04-16T00:00:00Z",
+	})
+	require.NoError(t, err)
+
+	body := `{
+		"country": "Norway",
+		"features": {}
+	}`
+
+	req := httptest.NewRequest(http.MethodPut, utility.RegistrationPathID+"reg-put-001", bytes.NewBufferString(body))
+	req.SetPathValue("id", "reg-put-001")
+	req.Header.Set(utility.ContentType, utility.ApplicationJSON)
+
+	rr := httptest.NewRecorder()
+	h.replaceRegistration(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.Contains(t, rr.Body.String(), "failed resolving country or iso-code")
 }
 
 func TestReplaceRegistrationInvalidJson(t *testing.T) {
