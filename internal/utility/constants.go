@@ -29,20 +29,20 @@ const (
 
 // Authentication
 const (
-	APIKeyHeader      = "Authorization"
+	APIKeyHeader      = "X-API-Key"
 	BaseAPIKeyStarter = "sk-envdash-"
 	OpenAQAPIKey      = "OPENAQ_API_KEY"
 )
 
 // External API base URLs
 const (
-	RestCountriesAPIURL = "http://129.241.150.113:8080/v3.1/alpha/"
+	RestCountriesAPIURL     = "http://129.241.150.113:8080/v3.1/alpha/"
 	RestCountriesAPIURLName = "http://129.241.150.113:8080/v3.1/name/{name}"
-	OpenMeteoAPIURL     = "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lng}&hourly=temperature_2m,precipitation"
-	OpenAQURL           = "https://api.openaq.org/v3/locations?coordinates={lat},{lng}&radius=25000&limit=100"
-	OpenAQLatestURL     = "https://api.openaq.org/v3/locations/{id}/latest"
-	OSMURL              = "https://nominatim.openstreetmap.org/search?city={cap}&countrycodes={isoCode}&format=jsonv2&addressdetails=1&limit=1"
-	CurrencyAPIURL      = "https://api.exchangerate-api.com/v4/latest/{cur}"
+	OpenMeteoAPIURL         = "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lng}&hourly=temperature_2m,precipitation"
+	OpenAQURL               = "https://api.openaq.org/v3/locations?coordinates={lat},{lng}&radius=25000&limit=100"
+	OpenAQLatestURL         = "https://api.openaq.org/v3/locations/{id}/latest"
+	OSMURL                  = "https://nominatim.openstreetmap.org/search?city={cap}&countrycodes={isoCode}&format=jsonv2&addressdetails=1&limit=1"
+	CurrencyAPIURL          = "https://api.exchangerate-api.com/v4/latest/{cur}"
 )
 
 // URL template placeholders
