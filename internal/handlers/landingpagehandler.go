@@ -58,6 +58,22 @@ const landingHTML = `<!DOCTYPE html>
     margin-top: 1rem;
     border: 1px solid rgba(56, 189, 248, 0.3);
   }
+  .endpoint-group {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: rgba(15, 23, 42, 0.35);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .endpoint-group:last-child {
+    margin-bottom: 0;
+  }
+  .endpoint-group h3 {
+    color: #cbd5e1;
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+  }
   section {
     background: var(--card);
     border: 1px solid var(--border);
@@ -94,6 +110,7 @@ const landingHTML = `<!DOCTYPE html>
   .method.put    { background: #78350f; color: #fcd34d; }
   .method.delete { background: #7f1d1d; color: #fca5a5; }
   .method.head   { background: #4c1d95; color: #c4b5fd; }
+  .method.patch {  background: #0f766e;color: #99f6e4;}
   .path { color: var(--text); }
   .desc { color: var(--muted); margin-left: auto; font-family: sans-serif; font-size: 0.85rem; }
   code {
@@ -134,63 +151,107 @@ const landingHTML = `<!DOCTYPE html>
     </section>
 
     <section>
-      <h2>Endpoints</h2>
+  <h2>Endpoints</h2>
 
-      <div class="endpoint">
-        <span class="method post">POST</span>
-        <span class="path">/envdash/v1/registrations/</span>
-        <span class="desc">Create configuration</span>
-      </div>
-      <div class="endpoint">
-        <span class="method get">GET</span>
-        <span class="path">/envdash/v1/registrations/{id}</span>
-        <span class="desc">Get configuration</span>
-      </div>
-      <div class="endpoint">
-        <span class="method head">HEAD</span>
-        <span class="path">/envdash/v1/registrations/</span>
-        <span class="desc">Headers only</span>
-      </div>
-      <div class="endpoint">
-        <span class="method put">PUT</span>
-        <span class="path">/envdash/v1/registrations/{id}</span>
-        <span class="desc">Update configuration</span>
-      </div>
-      <div class="endpoint">
-        <span class="method delete">DELETE</span>
-        <span class="path">/envdash/v1/registrations/{id}</span>
-        <span class="desc">Delete configuration</span>
-      </div>
-      <div class="endpoint">
-        <span class="method get">GET</span>
-        <span class="path">/envdash/v1/dashboards/{id}</span>
-        <span class="desc">Populated dashboard</span>
-      </div>
-      <div class="endpoint">
-        <span class="method post">POST</span>
-        <span class="path">/envdash/v1/notifications/</span>
-        <span class="desc">Register webhook</span>
-      </div>
-      <div class="endpoint">
-        <span class="method get">GET</span>
-        <span class="path">/status/</span>
-        <span class="desc">Health check</span>
-      </div>
-      <div class="endpoint">
-        <span class="method post">POST</span>
-        <span class="path">/envdash/v1/auth/</span>
-        <span class="desc">Register &amp; get API key</span>
-      </div>
-      <div class="endpoint">
-        <span class="method delete">DELETE</span>
-        <span class="path">/envdash/v1/auth/{key}</span>
-        <span class="desc">Revoke API key</span>
-      </div>
-    </section>
+  <div class="endpoint-group">
+    <h3>Registrations</h3>
+
+    <div class="endpoint">
+      <span class="method post">POST</span>
+      <span class="path">/envdash/v1/registrations/</span>
+      <span class="desc">Create configuration</span>
+    </div>
+    <div class="endpoint">
+      <span class="method get">GET</span>
+      <span class="path">/envdash/v1/registrations/{id}</span>
+      <span class="desc">Get configuration</span>
+    </div>
+    <div class="endpoint">
+      <span class="method head">HEAD</span>
+      <span class="path">/envdash/v1/registrations/</span>
+      <span class="desc">Headers only</span>
+    </div>
+    <div class="endpoint">
+      <span class="method put">PUT</span>
+      <span class="path">/envdash/v1/registrations/{id}</span>
+      <span class="desc">Update configuration</span>
+    </div>
+    <div class="endpoint">
+      <span class="method patch">PATCH</span>
+      <span class="path">/envdash/v1/registrations/{id}</span>
+      <span class="desc">Partial update</span>
+    </div>
+    <div class="endpoint">
+      <span class="method delete">DELETE</span>
+      <span class="path">/envdash/v1/registrations/{id}</span>
+      <span class="desc">Delete configuration</span>
+    </div>
+  </div>
+
+  <div class="endpoint-group">
+    <h3>Dashboards</h3>
+
+    <div class="endpoint">
+      <span class="method get">GET</span>
+      <span class="path">/envdash/v1/dashboards/{id}</span>
+      <span class="desc">Get populated dashboard</span>
+    </div>
+  </div>
+
+  <div class="endpoint-group">
+    <h3>Notifications</h3>
+
+    <div class="endpoint">
+      <span class="method post">POST</span>
+      <span class="path">/envdash/v1/notifications/</span>
+      <span class="desc">Register a new webhook</span>
+    </div>
+    <div class="endpoint">
+      <span class="method get">GET</span>
+      <span class="path">/envdash/v1/notifications/{id}</span>
+      <span class="desc">Retrieve a webhook registration</span>
+    </div>
+    <div class="endpoint">
+      <span class="method get">GET</span>
+      <span class="path">/envdash/v1/notifications/</span>
+      <span class="desc">List all registered webhooks</span>
+    </div>
+    <div class="endpoint">
+      <span class="method delete">DELETE</span>
+      <span class="path">/envdash/v1/notifications/{id}</span>
+      <span class="desc">Delete a webhook registration</span>
+    </div>
+  </div>
+
+  <div class="endpoint-group">
+    <h3>Authentication</h3>
+
+    <div class="endpoint">
+      <span class="method post">POST</span>
+      <span class="path">/envdash/v1/auth/</span>
+      <span class="desc">Register and get API key</span>
+    </div>
+    <div class="endpoint">
+      <span class="method delete">DELETE</span>
+      <span class="path">/envdash/v1/auth/{key}</span>
+      <span class="desc">Revoke API key</span>
+    </div>
+  </div>
+
+  <div class="endpoint-group">
+    <h3>Status</h3>
+
+    <div class="endpoint">
+      <span class="method get">GET</span>
+      <span class="path">/status/</span>
+      <span class="desc">Health check</span>
+    </div>
+  </div>
+</section>
 
     <section>
       <h2>Quick Start</h2>
-      <p>Try it: <a href="/envdash/v1/status/">/status/</a></p>
+      <p>Try it: <a href="/envdash/v1/status/">status</a></p>
     </section>
 
     <footer>

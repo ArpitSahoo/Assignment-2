@@ -34,7 +34,8 @@ func (h *Handler) HandleStatus(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetStatus(w http.ResponseWriter) {
 	results := getAPIStatuses()
 	uptimeSeconds := int(time.Since(startTime).Seconds())
-	webhookCount := h.getWebhookCount()
+	webhookCount := h.getDocumentCount(utility.WebhooksCollection)
+	registrationCount := h.getDocumentCount(utility.RegistrationsCollection)
 
 	resp := models.StatusResponse{
 		RestCountriesAPI: results["restCountries"],
@@ -44,6 +45,7 @@ func (h *Handler) handleGetStatus(w http.ResponseWriter) {
 		CurrencyAPI:      results["currency"],
 		NotificationDB:   h.probeFirestore(),
 		Webhooks:         webhookCount,
+		Registrations:    registrationCount,
 		Version:          "v1",
 		Uptime:           uptimeSeconds,
 	}
@@ -133,15 +135,13 @@ func (h *Handler) probeFirestore() int {
 	return http.StatusOK
 }
 
-// getWebhookCount returns the number of webhooks currently stored in Firestore.
-// Returns -1 if collection cannot be retrieved.
-func (h *Handler) getWebhookCount() int {
-	webhookCount := -1
-	docs, err := h.Client.Collection(utility.WebhooksCollection).Documents(context.Background()).GetAll()
+// getDocumentCount returns the number of documents in the given Firestore collection.
+// Returns -1 if the collection cannot be retrieved.
+func (h *Handler) getDocumentCount(collection string) int {
+	docs, err := h.Client.Collection(collection).Documents(context.Background()).GetAll()
 	if err != nil {
-		log.Printf("Could not fetch webhook count: %v", err)
-	} else {
-		webhookCount = len(docs)
+		log.Printf("Could not fetch count for %s: %v", collection, err)
+		return -1
 	}
-	return webhookCount
+	return len(docs)
 }

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"assignment-2/internal/models"
+	"assignment-2/internal/utility"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -69,7 +70,7 @@ func TestHandleStatus_FirestoreReachable(t *testing.T) {
 	assert.Equal(t, http.StatusOK, body.NotificationDB)
 }
 
-func TestHandleStatus_WebhookCount(t *testing.T) {
+func TestHandleStatus_Counts(t *testing.T) {
 	client := newTestFirestoreClient(t)
 	clearFirestoreEmulator(t)
 
@@ -85,9 +86,10 @@ func TestHandleStatus_WebhookCount(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, 0, body.Webhooks)
+	assert.Equal(t, 0, body.Registrations)
 }
 
-func TestHandleStatus_WebhookCount_Error(t *testing.T) {
+func TestGetDocumentCount_Error(t *testing.T) {
 	client := newTestFirestoreClient(t)
 	err := client.Close()
 	if err != nil {
@@ -96,7 +98,7 @@ func TestHandleStatus_WebhookCount_Error(t *testing.T) {
 
 	h := &Handler{Client: client}
 
-	count := h.getWebhookCount()
+	count := h.getDocumentCount(utility.WebhooksCollection)
 
 	assert.Equal(t, -1, count)
 }
