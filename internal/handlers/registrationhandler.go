@@ -128,8 +128,6 @@ func (h *Handler) addRegistration(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Registration created with ID: %s", id)
-	// Increase the local registration count by one
-	h.RegistrationCount.Add(1)
 	h.triggerLifecycleWebhooks(ctx, "REGISTER", isoCode)
 
 	w.Header().Set(utility.ContentType, utility.ApplicationJSON)
