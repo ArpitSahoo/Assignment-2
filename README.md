@@ -149,27 +149,70 @@ For full request/response examples, see the [assignment specification](LINK TO A
 
 ## Setup — Docker
 
-### Build and run locally with Docker
+### Prerequisites
+
+Create these files locally before starting the container:
+
+- `.env`
+- `.secrets/firebase-credential.json`
+- The repository already includes 'compose.yml' and 'Dockerfile'
+
+Structure:
+
+```text
+.Assignment-2
+├── .env
+├── .secrets/
+│   └── firebase-credential.json
+├── Dockerfile
+├── compose.yml
+└── ...
+```
+
+### How to setup environment variables
+
+- Create a `.env` file in the project root before starting the container and add:
+```env
+ OPENAQ_API_KEY=your_api_key_here
+ FIREBASE_PROJECT_ID="assigment-2-4d134"
+```
+
+### Compose and build
 
 ```bash
-docker build -t envdash:latest .
+`Use either one depending on your plugin`
+sudo docker-compose up -d --build
+sudo docker compose up --build
+```
 
-docker run -p 8080:8080 \
+or
+
+```bash
+sudo docker run -p 8080:8080 \
+  --env-file .env \
   -e PORT=8080 \
-  -e OPENAQ_API_KEY=your-key-here \
-  -e GOOGLE_APPLICATION_CREDENTIALS=/app/secret.json \
-  -v $(pwd)/secret.json:/app/secret.json:ro \
-  envdash:latest
+  -e GOOGLE_APPLICATION_CREDENTIALS=/googlecredentials/firebase-credential.json \
+  -v "$(pwd)/.secrets:/googlecredentials:ro" \
+  assignment-2-api
 ```
 
-### Or with docker-compose
+### Check deployment status
 
 ```bash
-docker compose up --build
+sudo docker ps
+sudo docker-compose ps
+sudo docker-compose logs -f api
 ```
+What each does:
+- `sudo docker ps` shows running containers
+- `sudo docker-compose ps` shows the status of services from your compose file
+- `sudo docker-compose logs -f api` shows the app logs for the `api` service
 
-The compose file expects `secret.json` in the project root and reads other variables from your shell environment or a `.env` file (not committed).
+### Notes
 
+- The service runs on port `8080`
+- Firebase credentials must be available at `.secrets/firebase-credential.json`
+- The container reads the credential file from `/googlecredentials/firebase-credential.json`
 ---
 
 ## Setup — SkyHigh Deployment
