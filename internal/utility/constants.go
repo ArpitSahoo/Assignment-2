@@ -6,7 +6,7 @@ const (
 	RegistrationPathID   = "/envdash/v1/registrations/{id}"
 	NotificationPath     = "/envdash/v1/notifications/{id}"
 	NotificationPathBase = "/envdash/v1/notifications/"
-	DashboardPath        = "/envdash/v1/dashboard/{id}"
+	DashboardPath        = "/envdash/v1/dashboards/{id}"
 	StatusPath           = "/envdash/v1/status/"
 	AuthPath             = "/envdash/v1/auth/"
 	AuthPathKey          = "/envdash/v1/auth/{key}"
@@ -36,13 +36,13 @@ const (
 
 // External API base URLs
 const (
-	RestCountriesAPIURL = "http://129.241.150.113:8080/v3.1/alpha/"
+	RestCountriesAPIURL     = "http://129.241.150.113:8080/v3.1/alpha/"
 	RestCountriesAPIURLName = "http://129.241.150.113:8080/v3.1/name/{name}"
-	OpenMeteoAPIURL     = "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lng}&hourly=temperature_2m,precipitation"
-	OpenAQURL           = "https://api.openaq.org/v3/locations?coordinates={lat},{lng}&radius=25000&limit=100"
-	OpenAQLatestURL     = "https://api.openaq.org/v3/locations/{id}/latest"
-	OSMURL              = "https://nominatim.openstreetmap.org/search?city={cap}&countrycodes={isoCode}&format=jsonv2&addressdetails=1&limit=1"
-	CurrencyAPIURL      = "https://api.exchangerate-api.com/v4/latest/{cur}"
+	OpenMeteoAPIURL         = "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lng}&hourly=temperature_2m,precipitation"
+	OpenAQURL               = "https://api.openaq.org/v3/locations?coordinates={lat},{lng}&radius=25000&limit=100"
+	OpenAQLatestURL         = "https://api.openaq.org/v3/locations/{id}/latest"
+	OSMURL                  = "https://nominatim.openstreetmap.org/search?city={cap}&countrycodes={isoCode}&format=jsonv2&addressdetails=1&limit=1"
+	CurrencyAPIURL          = "https://api.exchangerate-api.com/v4/latest/{cur}"
 )
 
 // URL template placeholders
