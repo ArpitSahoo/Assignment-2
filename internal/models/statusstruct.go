@@ -9,6 +9,7 @@ type StatusResponse struct {
 	CurrencyAPI      int    `json:"currency_api"`
 	NotificationDB   int    `json:"notification_db"`
 	Webhooks         int    `json:"webhooks"`
+	Registrations    int    `json:"registrations"`
 	Version          string `json:"version"`
 	Uptime           int    `json:"uptime"`
 }
