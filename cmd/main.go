@@ -15,6 +15,7 @@ import (
 	"cloud.google.com/go/firestore"
 )
 
+// main starting point of service
 func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
